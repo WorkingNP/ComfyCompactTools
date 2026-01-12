@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Grok-Comfy Cockpit (MVP)</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Grok-Comfy Cockpit <span class="badge">MVP</span></div>
+    <div class="status">
+      <span id="comfyStatus" class="pill pill--warn">Comfy: unknown</span>
+      <span id="wsStatus" class="pill pill--warn">WS: connecting</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Left: prompt + params -->
+    <section class="pane pane--left">
+      <div class="pane__title">Queue 投入</div>
+      <div class="pane__body scroll">
+        <label class="label">Prompt</label>
+        <textarea id="quickPrompt" class="textarea promptInput" rows="6" placeholder="例: 1boy soccer, cinematic lighting"></textarea>
+
+        <div class="row queueActions">
+          <button id="queueBtn" class="btn btn--primary">Queue</button>
+          <button id="queueKeepBtn" class="btn">Queue (保持)</button>
+          <button id="clearPromptBtn" class="btn">Clear</button>
+          <button id="selectPromptBtn" class="btn">Select</button>
+        </div>
+
+        <details class="details" open>
+          <summary>基本設定</summary>
+          <div class="grid2">
+            <div>
+              <label class="label">Checkpoint</label>
+              <select id="checkpoint" class="select"></select>
+            </div>
+            <div>
+              <label class="label">Sampler</label>
+              <select id="sampler" class="select"></select>
+            </div>
+            <div>
+              <label class="label">Scheduler</label>
+              <select id="scheduler" class="select"></select>
+            </div>
+            <div>
+              <label class="label">Clip Skip</label>
+              <input id="clipSkip" class="input" type="number" min="1" max="24" value="2" />
+            </div>
+            <div>
+              <label class="label">Steps</label>
+              <input id="steps" class="input" type="number" min="1" max="150" value="20" />
+            </div>
+            <div>
+              <label class="label">CFG</label>
+              <input id="cfg" class="input" type="number" step="0.1" min="0" max="40" value="4" />
+            </div>
+            <div>
+              <label class="label">Seed (-1=random)</label>
+              <input id="seed" class="input" type="number" value="-1" />
+            </div>
+            <div>
+              <label class="label">Width</label>
+              <input id="width" class="input" type="number" min="64" max="4096" step="64" value="832" />
+            </div>
+            <div>
+              <label class="label">Height</label>
+              <input id="height" class="input" type="number" min="64" max="4096" step="64" value="1024" />
+            </div>
+            <div>
+              <label class="label">Batch</label>
+              <input id="batch" class="input" type="number" min="1" max="16" value="1" />
+            </div>
+            <div>
+              <label class="label">VAE</label>
+              <select id="vae" class="select"></select>
+            </div>
+          </div>
+        </details>
+
+        <details class="details">
+          <summary>Negative Prompt</summary>
+          <textarea id="neg" class="textarea" rows="4" placeholder="(optional)"></textarea>
+        </details>
+
+        <details class="details" open>
+          <summary>Grok Chat</summary>
+
+          <div class="grokBox">
+            <div class="grokRow">
+              <span id="grokStatus" class="pill pill--warn">Grok: unknown</span>
+              <select id="grokModelSelect" class="select grokModelSelect" aria-label="Grok model"></select>
+              <label class="grokToggle" title="Send full history to Grok (otherwise recent only)">
+                <input id="grokSendFullHistory" type="checkbox" />
+                <span>Send full history</span>
+              </label>
+            </div>
+
+            <div id="grokMessages" class="grokMessages">
+              <div class="hint" style="margin:0">No messages yet.</div>
+            </div>
+
+            <div class="grokLog">
+              <div class="grokLog__title">Log</div>
+              <div id="grokLog" class="grokLog__items">No errors.</div>
+            </div>
+
+            <div class="grokComposer">
+              <textarea id="grokInput" class="textarea" rows="2" placeholder="Grokに指示…（Enterで送信 / Shift+Enterで改行）"></textarea>
+              <button id="grokSendBtn" class="btn btn--primary">Send</button>
+            </div>
+          </div>
+        </details>
+
+        <div class="hint">
+          <div>Enter で即Queue（入力欄フォーカス時）。Shift+Enter で改行。</div>
+          <div>生成待ちでもガンガン追加してOK（UIは詰まらない前提）。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Middle: queue list -->
+    <section class="pane pane--mid">
+      <div class="pane__title">Queue</div>
+      <div class="pane__body pane__body--stack">
+        <div class="queueLog">
+          <div class="queueLog__title">Log</div>
+          <div id="queueLog" class="queueLog__items">No errors.</div>
+        </div>
+        <div id="queueList" class="scroll queueList"></div>
+      </div>
+    </section>
+
+    <!-- Right: gallery -->
+    <section class="pane pane--right">
+      <div class="pane__title">Gallery</div>
+      <div id="gallery" class="pane__body scroll gallery"></div>
+    </section>
+  </main>
+
+  <!-- Modal viewer -->
+  <div id="modal" class="modal hidden">
+    <div class="modal__backdrop" id="modalBackdrop"></div>
+    <div class="modal__content">
+      <div class="modal__header">
+        <div id="modalTitle" class="modal__title">Asset</div>
+        <div class="modal__actions">
+          <div class="zoomControls">
+            <button id="zoomOutBtn" class="btn">-</button>
+            <input id="zoomRange" class="zoomRange" type="range" min="10" max="200" value="100" />
+            <button id="zoomInBtn" class="btn">+</button>
+            <button id="zoomFitBtn" class="btn">Fit</button>
+          </div>
+          <button id="favBtn" class="btn btn--star">Favorite</button>
+          <button id="closeModalBtn" class="btn">Close</button>
+        </div>
+      </div>
+      <div class="modal__body">
+        <div class="modal__imageWrap">
+          <img id="modalImg" alt="generated" />
+        </div>
+        <pre id="modalMeta" class="modal__meta"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

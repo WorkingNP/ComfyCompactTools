@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (future)
+node_modules/
+
+# Local data (keep only the placeholder)
+/data/
+!/data/.gitkeep
+
+# Secrets
+.env
+
+# OS
+.DS_Store

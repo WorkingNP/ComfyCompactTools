@@ -1,0 +1,4 @@
+{
+  "comfy_url": "http://127.0.0.1:8188",
+  "comfy_checkpoint": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors"
+}

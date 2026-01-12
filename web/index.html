@@ -21,7 +21,7 @@
       <div class="pane__title">Queue 投入</div>
       <div class="pane__body scroll">
         <label class="label">Prompt</label>
-        <textarea id="quickPrompt" class="textarea promptInput" rows="6" placeholder="例: 1boy soccer, cinematic lighting"></textarea>
+        <textarea id="quickPrompt" class="textarea promptInput" rows="8" placeholder="例: 1boy soccer, cinematic lighting"></textarea>
 
         <div class="row queueActions">
           <button id="queueBtn" class="btn btn--primary">Queue</button>
@@ -81,6 +81,16 @@
         </details>
 
         <details class="details">
+          <summary>Templates</summary>
+          <div class="row templateRow">
+            <select id="templateSelect" class="select"></select>
+            <button id="applyTemplateBtn" class="btn">Apply</button>
+            <button id="insertTriggersBtn" class="btn">Insert triggers</button>
+          </div>
+          <div id="templateNotes" class="templateNotes">No template selected.</div>
+        </details>
+
+        <details class="details">
           <summary>Negative Prompt</summary>
           <textarea id="neg" class="textarea" rows="4" placeholder="(optional)"></textarea>
         </details>
@@ -136,7 +146,14 @@
     <!-- Right: gallery -->
     <section class="pane pane--right">
       <div class="pane__title">Gallery</div>
-      <div id="gallery" class="pane__body scroll gallery"></div>
+      <div class="pane__body pane__body--stack">
+        <div class="galleryToolbar">
+          <span class="galleryToolbar__label">Thumb</span>
+          <input id="thumbSize" class="galleryToolbar__range" type="range" min="120" max="320" value="200" />
+          <span id="thumbSizeValue" class="galleryToolbar__value">200</span>
+        </div>
+        <div id="gallery" class="scroll gallery"></div>
+      </div>
     </section>
   </main>
 
@@ -147,6 +164,10 @@
       <div class="modal__header">
         <div id="modalTitle" class="modal__title">Asset</div>
         <div class="modal__actions">
+          <div class="modalNav">
+            <button id="prevAssetBtn" class="btn">Prev</button>
+            <button id="nextAssetBtn" class="btn">Next</button>
+          </div>
           <div class="zoomControls">
             <button id="zoomOutBtn" class="btn">-</button>
             <input id="zoomRange" class="zoomRange" type="range" min="10" max="200" value="100" />

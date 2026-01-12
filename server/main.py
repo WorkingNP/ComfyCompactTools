@@ -210,6 +210,24 @@ class GrokMessageOut(BaseModel):
     created_at: str
 
 
+class TemplateOut(BaseModel):
+    name: str
+    checkpoint: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    steps: Optional[int] = None
+    cfg: Optional[float] = None
+    sampler_name: Optional[str] = None
+    scheduler: Optional[str] = None
+    seed: Optional[int] = None
+    batch_size: Optional[int] = None
+    clip_skip: Optional[int] = None
+    vae: Optional[str] = None
+    negative_prompt: Optional[str] = None
+    trigger_words: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
 class GrokImageIn(BaseModel):
     prompt: str = Field(..., min_length=1)
     model: Optional[str] = None
@@ -610,6 +628,26 @@ async def grok_chat_api(req: GrokChatIn) -> GrokChatOut:
 async def grok_history(limit: Optional[int] = None) -> List[GrokMessageOut]:
     rows = db.list_grok_messages(limit=limit)
     return [GrokMessageOut(role=r.role, content=r.content, created_at=r.created_at) for r in rows]
+
+
+@app.get("/api/templates", response_model=List[TemplateOut])
+async def list_templates() -> List[TemplateOut]:
+    templates_path = Path(__file__).resolve().parent.parent / "templates.json"
+    if templates_path.exists():
+        try:
+            with templates_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            items = data.get("templates") if isinstance(data, dict) else data
+            if isinstance(items, list):
+                out = []
+                for item in items:
+                    if isinstance(item, dict) and item.get("name"):
+                        out.append(TemplateOut(**item))
+                if out:
+                    return out
+        except Exception:
+            pass
+    return []
 
 
 @app.post("/api/grok/image", response_model=List[AssetOut])

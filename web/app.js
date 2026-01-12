@@ -13,6 +13,8 @@ const state = {
   jobErrorSeen: new Set(),
   modalZoom: 1,
   modalFitZoom: 1,
+  templates: [],
+  thumbSize: 200,
 };
 
 const GROK_HISTORY_TOGGLE_KEY = 'grokSendFullHistory';
@@ -312,6 +314,101 @@ async function initGrokHistory() {
   }
 }
 
+async function initTemplates() {
+  const tryFetch = async (url) => {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`${url} -> ${r.status}`);
+    return await r.json();
+  };
+
+  try {
+    const res = await tryFetch('/api/templates');
+    state.templates = Array.isArray(res) ? res : [];
+  } catch (e) {
+    try {
+      const res = await tryFetch('/templates.json');
+      const items = res?.templates;
+      state.templates = Array.isArray(items) ? items : [];
+    } catch (err) {
+      console.warn('templates unavailable', err);
+      state.templates = [];
+    }
+  }
+
+  const select = $('#templateSelect');
+  if (!select) return;
+  const names = state.templates.map((t) => t.name);
+  populateSelect(select, ['(none)', ...names], '(none)');
+  updateTemplateNotes();
+}
+
+function getSelectedTemplate() {
+  const select = $('#templateSelect');
+  if (!select) return null;
+  const name = select.value;
+  return state.templates.find((t) => t.name === name) || null;
+}
+
+function updateTemplateNotes() {
+  const notesEl = $('#templateNotes');
+  if (!notesEl) return;
+  const t = getSelectedTemplate();
+  if (!t) {
+    notesEl.textContent = 'No template selected.';
+    return;
+  }
+  const triggers = Array.isArray(t.trigger_words) ? t.trigger_words.join(', ') : '';
+  const lines = [];
+  if (t.notes) lines.push(t.notes);
+  if (triggers) lines.push(`Triggers: ${triggers}`);
+  notesEl.textContent = lines.length ? lines.join('\n') : 'No notes.';
+}
+
+function applyTemplate() {
+  const t = getSelectedTemplate();
+  if (!t) return;
+
+  if (t.checkpoint) $('#checkpoint').value = t.checkpoint;
+  if (t.sampler_name) $('#sampler').value = t.sampler_name;
+  if (t.scheduler) $('#scheduler').value = t.scheduler;
+  if (t.steps != null) $('#steps').value = t.steps;
+  if (t.cfg != null) $('#cfg').value = t.cfg;
+  if (t.seed != null) $('#seed').value = t.seed;
+  if (t.width != null) $('#width').value = t.width;
+  if (t.height != null) $('#height').value = t.height;
+  if (t.batch_size != null) $('#batch').value = t.batch_size;
+  if (t.clip_skip != null) $('#clipSkip').value = t.clip_skip;
+  if (t.vae != null) $('#vae').value = t.vae;
+  if (t.negative_prompt != null) $('#neg').value = t.negative_prompt;
+
+  updateTemplateNotes();
+}
+
+function insertTemplateTriggers() {
+  const t = getSelectedTemplate();
+  if (!t || !Array.isArray(t.trigger_words) || t.trigger_words.length === 0) return;
+  const prompt = $('#quickPrompt');
+  if (!prompt) return;
+  const current = prompt.value || '';
+  const insert = t.trigger_words.join(', ');
+  prompt.value = current ? `${current}, ${insert}` : insert;
+  prompt.focus();
+}
+
+function initGalleryControls() {
+  const range = $('#thumbSize');
+  const value = $('#thumbSizeValue');
+  const gallery = $('#gallery');
+  if (!range || !value || !gallery) return;
+  const apply = (val) => {
+    state.thumbSize = val;
+    gallery.style.setProperty('--thumb-size', `${val}px`);
+    value.textContent = String(val);
+  };
+  apply(state.thumbSize);
+  range.addEventListener('input', () => apply(Number(range.value || 200)));
+}
+
 function renderGrokLog() {
   const box = $('#grokLog');
   if (!box) return;
@@ -568,6 +665,18 @@ function setupUI() {
   $('#closeModalBtn').onclick = closeModal;
   $('#modalBackdrop').onclick = closeModal;
   $('#favBtn').onclick = toggleFavorite;
+  const templateSelect = $('#templateSelect');
+  const applyTemplateBtn = $('#applyTemplateBtn');
+  const insertTriggersBtn = $('#insertTriggersBtn');
+  if (templateSelect) {
+    templateSelect.onchange = updateTemplateNotes;
+  }
+  if (applyTemplateBtn) applyTemplateBtn.onclick = applyTemplate;
+  if (insertTriggersBtn) insertTriggersBtn.onclick = insertTemplateTriggers;
+  const prevBtn = $('#prevAssetBtn');
+  const nextBtn = $('#nextAssetBtn');
+  if (prevBtn) prevBtn.onclick = () => openAssetByOffset(1);
+  if (nextBtn) nextBtn.onclick = () => openAssetByOffset(-1);
   const zoomRange = $('#zoomRange');
   const zoomInBtn = $('#zoomInBtn');
   const zoomOutBtn = $('#zoomOutBtn');
@@ -604,6 +713,8 @@ function setupUI() {
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
+    if (e.key === 'ArrowRight') openAssetByOffset(1);
+    if (e.key === 'ArrowLeft') openAssetByOffset(-1);
   });
   window.addEventListener('resize', () => {
     const modal = $('#modal');
@@ -629,7 +740,20 @@ async function initConfig() {
   const cfg = await apiGet('/api/config');
   state.config = cfg;
 
-  const defaults = cfg.defaults || {};
+  const uiDefaults = {
+    width: 832,
+    height: 1024,
+    steps: 20,
+    cfg: 4.0,
+    sampler_name: 'euler_ancestral',
+    scheduler: 'normal',
+    seed: -1,
+    batch_size: 1,
+    clip_skip: 2,
+    vae: null,
+    negative_prompt: '(worst quality, low quality:1.4), (deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), cloned face, malformed hands, long neck, extra breasts, mutated pussy, bad pussy, blurry, watermark, text, error, cropped',
+  };
+  const defaults = { ...(cfg.defaults || {}), ...uiDefaults };
   $('#steps').value = defaults.steps ?? 20;
   $('#cfg').value = defaults.cfg ?? 7;
   $('#seed').value = defaults.seed ?? -1;
@@ -645,12 +769,29 @@ async function initConfig() {
   const vaes = cfg.choices?.vaes || [];
 
   populateSelect($('#checkpoint'), cps.length ? cps : ['(no checkpoints found)'], defaults.checkpoint);
-  populateSelect($('#sampler'), samplers, defaults.sampler_name);
-  populateSelect($('#scheduler'), schedulers, defaults.scheduler);
+  const samplerDefault = samplers.includes(defaults.sampler_name) ? defaults.sampler_name : (samplers[0] || '');
+  const schedulerDefault = schedulers.includes(defaults.scheduler) ? defaults.scheduler : (schedulers[0] || '');
+  populateSelect($('#sampler'), samplers, samplerDefault);
+  populateSelect($('#scheduler'), schedulers, schedulerDefault);
   const vaeList = ['(auto)', ...vaes];
   populateSelect($('#vae'), vaeList, defaults.vae || '(auto)');
 
   setPill($('#comfyStatus'), `Comfy: ${cfg.comfy_url}`, 'pill--warn');
+}
+
+function getSortedAssets() {
+  return Array.from(state.assets.values()).sort(sortByCreatedDesc);
+}
+
+function openAssetByOffset(offset) {
+  const modal = $('#modal');
+  if (!modal || modal.classList.contains('hidden')) return;
+  if (!state.selectedAssetId) return;
+  const assets = getSortedAssets();
+  if (!assets.length) return;
+  const idx = assets.findIndex((a) => a.id === state.selectedAssetId);
+  const nextIdx = idx === -1 ? 0 : (idx + offset + assets.length) % assets.length;
+  openModal(assets[nextIdx].id);
 }
 
 function connectWS() {
@@ -743,6 +884,8 @@ function connectWS() {
 async function boot() {
   setupUI();
   await initConfig();
+  await initTemplates();
+  initGalleryControls();
   await initGrok();
   await initGrokHistory();
   connectWS();

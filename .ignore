@@ -1,2 +1,11 @@
 # Claude Code が読み込まないファイル/フォルダ
 Aurora攻略/
+画像ビューア/
+
+# Large model files
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx

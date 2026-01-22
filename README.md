@@ -95,11 +95,94 @@ python -m uvicorn server.main:app --reload --host 127.0.0.1 --port 8787
 
 ---
 
+## Workflow Registry (New!)
+
+The cockpit now supports multiple workflows through a template + manifest architecture.
+
+### Available Workflows
+
+- `sd15_txt2img` - Classic Stable Diffusion 1.5 text-to-image
+- `flux2_dev` - Flux 2 development model (may produce black images)
+- `flux2_klein_distilled` - Flux 2 Klein 4B distilled (fast, 4 steps)
+
+### Using a Workflow
+
+Send a `workflow_id` parameter when creating a job:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "a cat", "workflow_id": "flux2_klein_distilled"}'
+```
+
+### API Endpoints
+
+- `GET /api/workflows` - List available workflows
+- `GET /api/workflows/{id}` - Get workflow details (params, presets)
+- `POST /api/workflows/reload` - Reload workflows after adding new ones
+
+### Adding a New Workflow
+
+1. Create a directory: `workflows/<your_workflow_id>/`
+2. Export your ComfyUI workflow as API format: **File > Save (API Format)**
+3. Save it as `workflows/<your_workflow_id>/template_api.json`
+4. Create `workflows/<your_workflow_id>/manifest.json`:
+
+```json
+{
+  "id": "your_workflow_id",
+  "name": "Your Workflow Name",
+  "description": "What this workflow does",
+  "version": "1.0.0",
+  "template_file": "template_api.json",
+  "params": {
+    "prompt": {
+      "type": "string",
+      "required": true,
+      "patch": {
+        "node_id": "6",
+        "field": "inputs.text"
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "default": -1,
+      "patch": {
+        "node_id": "25",
+        "field": "inputs.noise_seed"
+      }
+    }
+  }
+}
+```
+
+5. Reload workflows: `POST /api/workflows/reload`
+
+See `docs/03_manifest_spec.md` for full manifest documentation.
+
+---
+
+## Testing
+
+```bash
+# Unit + Integration tests (no ComfyUI required)
+pytest server/tests/ -v --ignore=server/tests/test_e2e*.py
+
+# E2E tests (requires ComfyUI running)
+pytest server/tests/test_e2e*.py -v
+
+# All tests
+pytest -v
+```
+
+---
+
 ## この後の拡張（ロードマップ）
 
 - i2i / inpaint（`/upload/image`, `/upload/mask` を使う）
 - プロンプト資産管理（テンプレ／タグ／スニペット）
 - Grokチャット欄 → JSON → 一括Queue
 - Grok/VLMでの自動評価ループ（生成→評価→改善→再生成）
-- Comfyのカスタムノード／ワークフローテンプレ取り込み
+- ControlNet / XYZ Plot workflows
+- Dynamic UI form generation from manifests
 

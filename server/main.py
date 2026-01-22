@@ -22,6 +22,8 @@ from .comfy_workflow import build_txt2img_workflow
 from .db import Database
 from .events import WebSocketManager
 from .storage import ensure_dir, new_asset_filename, write_bytes
+from .workflow_registry import WorkflowRegistry, WorkflowNotFoundError
+from .workflow_patcher import apply_patch, PatchError
 
 
 load_dotenv()
@@ -84,12 +86,15 @@ ASSETS_DIR = os.path.join(DATA_DIR, "assets")
 DB_PATH = os.path.join(DATA_DIR, "cockpit.sqlite3")
 WEB_DIR = os.path.join(os.path.dirname(__file__), "..", "web")
 WEB_DIR = os.path.abspath(WEB_DIR)
+WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "workflows")
+WORKFLOWS_DIR = os.path.abspath(WORKFLOWS_DIR)
 
 ensure_dir(DATA_DIR)
 ensure_dir(ASSETS_DIR)
 
 
 db = Database(DB_PATH)
+workflow_registry = WorkflowRegistry(Path(WORKFLOWS_DIR))
 ws_manager = WebSocketManager()
 comfy = ComfyClient(settings.comfy_url)
 
@@ -142,6 +147,9 @@ def _extract_chat_text(data: Dict[str, Any]) -> str:
 class JobCreate(BaseModel):
     prompt: str = Field(..., min_length=1)
     negative_prompt: str = "(worst quality, low quality:1.4), (deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), cloned face, malformed hands, long neck, extra breasts, mutated pussy, bad pussy, blurry, watermark, text, error, cropped"
+
+    # Workflow selection (new!)
+    workflow_id: Optional[str] = None  # None means use legacy build_txt2img_workflow
 
     # Core params
     width: int = 832
@@ -232,6 +240,22 @@ class GrokImageIn(BaseModel):
     prompt: str = Field(..., min_length=1)
     model: Optional[str] = None
     n: int = Field(1, ge=1, le=4)
+
+
+class WorkflowOut(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    version: str = ""
+
+
+class WorkflowDetailOut(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    version: str = ""
+    params: Dict[str, Any]
+    presets: Dict[str, Any] = {}
 
 
 def jobrow_to_out(row) -> JobOut:
@@ -650,6 +674,51 @@ async def list_templates() -> List[TemplateOut]:
     return []
 
 
+# ========================
+# Workflow Registry API
+# ========================
+
+@app.get("/api/workflows", response_model=List[WorkflowOut])
+async def list_workflows() -> List[WorkflowOut]:
+    """List all available workflows."""
+    workflows = workflow_registry.list_workflows()
+    return [
+        WorkflowOut(
+            id=w["id"],
+            name=w["name"],
+            description=w.get("description", ""),
+            version=w.get("version", ""),
+        )
+        for w in workflows
+    ]
+
+
+@app.get("/api/workflows/{workflow_id}", response_model=WorkflowDetailOut)
+async def get_workflow(workflow_id: str) -> WorkflowDetailOut:
+    """Get workflow details including parameters."""
+    try:
+        wf = workflow_registry.get_workflow(workflow_id)
+        manifest = wf["manifest"]
+        return WorkflowDetailOut(
+            id=manifest["id"],
+            name=manifest["name"],
+            description=manifest.get("description", ""),
+            version=manifest.get("version", ""),
+            params=manifest.get("params", {}),
+            presets=manifest.get("presets", {}),
+        )
+    except WorkflowNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}")
+
+
+@app.post("/api/workflows/reload")
+async def reload_workflows() -> Dict[str, Any]:
+    """Reload workflow registry (useful after adding new workflows)."""
+    workflow_registry.reload()
+    workflows = workflow_registry.list_workflows()
+    return {"ok": True, "count": len(workflows)}
+
+
 @app.post("/api/grok/image", response_model=List[AssetOut])
 async def grok_image(req: GrokImageIn) -> List[AssetOut]:
     if not settings.xai_api_key:
@@ -771,84 +840,166 @@ async def create_job(req: JobCreate) -> JobOut:
 
     job_id = str(uuid.uuid4())
 
-    sampler_name = req.sampler_name
-    scheduler = req.scheduler
-    checkpoint = pick_checkpoint(req.checkpoint)
+    # Check if using workflow registry (new path) or legacy path
+    use_workflow_registry = req.workflow_id is not None
 
-    if CACHED_SAMPLERS and sampler_name not in CACHED_SAMPLERS:
-        await refresh_comfy_options()
-    if CACHED_SAMPLERS and sampler_name not in CACHED_SAMPLERS:
-        sampler_name = CACHED_SAMPLERS[0]
+    if use_workflow_registry:
+        # New workflow registry path
+        try:
+            wf = workflow_registry.get_workflow(req.workflow_id)
+        except WorkflowNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Workflow not found: {req.workflow_id}")
 
-    if CACHED_SCHEDULERS and scheduler not in CACHED_SCHEDULERS:
-        await refresh_comfy_options()
-    if CACHED_SCHEDULERS and scheduler not in CACHED_SCHEDULERS:
-        scheduler = CACHED_SCHEDULERS[0]
+        manifest = wf["manifest"]
+        template = wf["template"]
+        manifest_params = manifest.get("params", {})
 
-    if CACHED_CHECKPOINTS and checkpoint not in CACHED_CHECKPOINTS:
-        await refresh_comfy_options()
-    if CACHED_CHECKPOINTS and checkpoint not in CACHED_CHECKPOINTS:
-        checkpoint = CACHED_CHECKPOINTS[0]
+        # Build patch_params from ONLY explicitly provided fields
+        # This allows manifest defaults to be used for omitted fields
+        patch_params = {"prompt": prompt}
 
-    vae = (req.vae or "").strip() or None
-    if vae and CACHED_VAES and vae not in CACHED_VAES:
-        await refresh_comfy_options()
-    if vae and CACHED_VAES and vae not in CACHED_VAES:
-        vae = None
+        # Map request fields to manifest param names
+        # Some fields map to multiple params (e.g., width -> width, width_scheduler)
+        field_mappings = {
+            "negative_prompt": ["negative_prompt"],
+            "width": ["width", "width_scheduler"],
+            "height": ["height", "height_scheduler"],
+            "steps": ["steps"],
+            "cfg": ["cfg", "guidance"],  # cfg maps to both cfg and guidance for Flux2
+            "seed": ["seed"],
+            "batch_size": ["batch_size"],
+            "sampler_name": ["sampler_name"],
+            "scheduler": ["scheduler"],
+        }
 
-    params = {
-        "width": req.width,
-        "height": req.height,
-        "steps": req.steps,
-        "cfg": req.cfg,
-        "sampler_name": sampler_name,
-        "scheduler": scheduler,
-        "seed": req.seed,
-        "batch_size": req.batch_size,
-        "clip_skip": req.clip_skip,
-        "vae": vae,
-        "checkpoint": checkpoint,
-    }
+        # Only add params that were explicitly set by the client
+        for field, param_names in field_mappings.items():
+            if field in req.model_fields_set:
+                value = getattr(req, field)
+                for param_name in param_names:
+                    if param_name in manifest_params:
+                        patch_params[param_name] = value
 
-    db.create_job(
-        job_id=job_id,
-        engine="comfy",
-        status="queued",
-        prompt=prompt,
-        negative_prompt=req.negative_prompt or "",
-        params=params,
-    )
+        # Handle checkpoint specially (uses pick_checkpoint helper)
+        if "checkpoint" in req.model_fields_set and "checkpoint" in manifest_params:
+            patch_params["checkpoint"] = pick_checkpoint(req.checkpoint)
 
-    await ws_manager.broadcast({"type": "job_created", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+        # Store params for job record (only explicitly set values)
+        params = {"workflow_id": req.workflow_id}
+        for field in ["width", "height", "steps", "cfg", "sampler_name", "scheduler", "seed", "batch_size"]:
+            if field in req.model_fields_set:
+                params[field] = getattr(req, field)
 
-    try:
-        workflow = build_txt2img_workflow(
+        db.create_job(
+            job_id=job_id,
+            engine="comfy",
+            status="queued",
             prompt=prompt,
             negative_prompt=req.negative_prompt or "",
-            checkpoint=params["checkpoint"],
-            width=req.width,
-            height=req.height,
-            steps=req.steps,
-            cfg=req.cfg,
-            sampler_name=params["sampler_name"],
-            scheduler=params["scheduler"],
-            seed=req.seed,
-            batch_size=req.batch_size,
-            clip_skip=req.clip_skip,
-            vae=params["vae"],
+            params=params,
         )
 
-        res = await comfy.submit_prompt(workflow, COMFY_CLIENT_ID)
-        prompt_id = res.get("prompt_id")
-        if not prompt_id:
-            raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
+        await ws_manager.broadcast({"type": "job_created", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
 
-        db.update_job(job_id, prompt_id=str(prompt_id))
-        await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+        try:
+            # Apply patches to template
+            workflow = apply_patch(template, manifest, patch_params)
 
-    except Exception as e:
-        db.update_job(job_id, status="failed", error=str(e))
-        await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+            res = await comfy.submit_prompt(workflow, COMFY_CLIENT_ID)
+            prompt_id = res.get("prompt_id")
+            if not prompt_id:
+                raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
+
+            db.update_job(job_id, prompt_id=str(prompt_id))
+            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+        except PatchError as e:
+            db.update_job(job_id, status="failed", error=f"Patch error: {e}")
+            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+        except Exception as e:
+            db.update_job(job_id, status="failed", error=str(e))
+            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+    else:
+        # Legacy path: use build_txt2img_workflow for backward compatibility
+        sampler_name = req.sampler_name
+        scheduler = req.scheduler
+        checkpoint = pick_checkpoint(req.checkpoint)
+
+        if CACHED_SAMPLERS and sampler_name not in CACHED_SAMPLERS:
+            await refresh_comfy_options()
+        if CACHED_SAMPLERS and sampler_name not in CACHED_SAMPLERS:
+            sampler_name = CACHED_SAMPLERS[0]
+
+        if CACHED_SCHEDULERS and scheduler not in CACHED_SCHEDULERS:
+            await refresh_comfy_options()
+        if CACHED_SCHEDULERS and scheduler not in CACHED_SCHEDULERS:
+            scheduler = CACHED_SCHEDULERS[0]
+
+        if CACHED_CHECKPOINTS and checkpoint not in CACHED_CHECKPOINTS:
+            await refresh_comfy_options()
+        if CACHED_CHECKPOINTS and checkpoint not in CACHED_CHECKPOINTS:
+            checkpoint = CACHED_CHECKPOINTS[0]
+
+        vae = (req.vae or "").strip() or None
+        if vae and CACHED_VAES and vae not in CACHED_VAES:
+            await refresh_comfy_options()
+        if vae and CACHED_VAES and vae not in CACHED_VAES:
+            vae = None
+
+        params = {
+            "width": req.width,
+            "height": req.height,
+            "steps": req.steps,
+            "cfg": req.cfg,
+            "sampler_name": sampler_name,
+            "scheduler": scheduler,
+            "seed": req.seed,
+            "batch_size": req.batch_size,
+            "clip_skip": req.clip_skip,
+            "vae": vae,
+            "checkpoint": checkpoint,
+        }
+
+        db.create_job(
+            job_id=job_id,
+            engine="comfy",
+            status="queued",
+            prompt=prompt,
+            negative_prompt=req.negative_prompt or "",
+            params=params,
+        )
+
+        await ws_manager.broadcast({"type": "job_created", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+        try:
+            workflow = build_txt2img_workflow(
+                prompt=prompt,
+                negative_prompt=req.negative_prompt or "",
+                checkpoint=params["checkpoint"],
+                width=req.width,
+                height=req.height,
+                steps=req.steps,
+                cfg=req.cfg,
+                sampler_name=params["sampler_name"],
+                scheduler=params["scheduler"],
+                seed=req.seed,
+                batch_size=req.batch_size,
+                clip_skip=req.clip_skip,
+                vae=params["vae"],
+            )
+
+            res = await comfy.submit_prompt(workflow, COMFY_CLIENT_ID)
+            prompt_id = res.get("prompt_id")
+            if not prompt_id:
+                raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
+
+            db.update_job(job_id, prompt_id=str(prompt_id))
+            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+        except Exception as e:
+            db.update_job(job_id, status="failed", error=str(e))
+            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
 
     row = db.get_job(job_id)
     return jobrow_to_out(row)

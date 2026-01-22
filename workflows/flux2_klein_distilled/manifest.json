@@ -1,0 +1,165 @@
+{
+  "$schema": "../../docs/manifest.schema.json",
+  "id": "flux2_klein_distilled",
+  "name": "Flux 2 Klein Distilled",
+  "description": "Flux 2 Klein 4B distilled model - fast generation with only 4 steps",
+  "version": "1.0.0",
+  "template_file": "template_api.json",
+
+  "params": {
+    "prompt": {
+      "type": "string",
+      "required": true,
+      "description": "The text prompt for image generation",
+      "patch": {
+        "node_id": "2",
+        "field": "inputs.text"
+      }
+    },
+    "negative_prompt": {
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Negative prompt (minimal effect for distilled models)",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.text"
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "required": false,
+      "default": -1,
+      "min": -1,
+      "max": 2147483647,
+      "description": "Random seed (-1 for random)",
+      "patch": {
+        "node_id": "6",
+        "field": "inputs.noise_seed"
+      }
+    },
+    "width": {
+      "type": "integer",
+      "required": false,
+      "default": 1024,
+      "min": 256,
+      "max": 2048,
+      "description": "Output image width",
+      "patch": {
+        "node_id": "7",
+        "field": "inputs.width"
+      }
+    },
+    "height": {
+      "type": "integer",
+      "required": false,
+      "default": 1024,
+      "min": 256,
+      "max": 2048,
+      "description": "Output image height",
+      "patch": {
+        "node_id": "7",
+        "field": "inputs.height"
+      }
+    },
+    "width_scheduler": {
+      "type": "integer",
+      "required": false,
+      "default": 1024,
+      "min": 256,
+      "max": 2048,
+      "description": "Scheduler width (should match image width)",
+      "patch": {
+        "node_id": "8",
+        "field": "inputs.width"
+      }
+    },
+    "height_scheduler": {
+      "type": "integer",
+      "required": false,
+      "default": 1024,
+      "min": 256,
+      "max": 2048,
+      "description": "Scheduler height (should match image height)",
+      "patch": {
+        "node_id": "8",
+        "field": "inputs.height"
+      }
+    },
+    "steps": {
+      "type": "integer",
+      "required": false,
+      "default": 4,
+      "min": 1,
+      "max": 20,
+      "description": "Number of sampling steps (4 is optimal for distilled)",
+      "patch": {
+        "node_id": "8",
+        "field": "inputs.steps"
+      }
+    },
+    "cfg": {
+      "type": "number",
+      "required": false,
+      "default": 1.0,
+      "min": 0.5,
+      "max": 5.0,
+      "description": "CFG scale (1.0 is optimal for distilled models)",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.cfg"
+      }
+    },
+    "sampler_name": {
+      "type": "string",
+      "required": false,
+      "default": "euler",
+      "description": "Sampling algorithm",
+      "patch": {
+        "node_id": "9",
+        "field": "inputs.sampler_name"
+      }
+    },
+    "batch_size": {
+      "type": "integer",
+      "required": false,
+      "default": 1,
+      "min": 1,
+      "max": 8,
+      "description": "Number of images to generate",
+      "patch": {
+        "node_id": "7",
+        "field": "inputs.batch_size"
+      }
+    }
+  },
+
+  "presets": {
+    "default": {
+      "width": 1024,
+      "height": 1024,
+      "width_scheduler": 1024,
+      "height_scheduler": 1024,
+      "steps": 4,
+      "cfg": 1.0
+    },
+    "portrait": {
+      "width": 768,
+      "height": 1024,
+      "width_scheduler": 768,
+      "height_scheduler": 1024
+    },
+    "landscape": {
+      "width": 1024,
+      "height": 768,
+      "width_scheduler": 1024,
+      "height_scheduler": 768
+    }
+  },
+
+  "quality_checks": {
+    "black_threshold": 0.01,
+    "white_threshold": 0.99,
+    "skip_checks": false
+  }
+}

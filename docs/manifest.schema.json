@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comfycompacttools.local/manifest.schema.json",
+  "title": "Workflow Manifest",
+  "description": "Schema for workflow manifest files",
+  "type": "object",
+  "required": ["id", "name", "template_file", "params"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "Unique workflow identifier (lowercase, underscores, no spaces)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable workflow name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Longer description of the workflow"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (e.g., 1.0.0)"
+    },
+    "template_file": {
+      "type": "string",
+      "description": "Relative path to the template JSON file"
+    },
+    "params": {
+      "type": "object",
+      "description": "Parameter definitions",
+      "additionalProperties": {
+        "$ref": "#/$defs/paramDefinition"
+      }
+    },
+    "presets": {
+      "type": "object",
+      "description": "Named parameter presets",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Preset parameter values"
+      }
+    },
+    "quality_checks": {
+      "type": "object",
+      "properties": {
+        "black_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.01,
+          "description": "Brightness below this is considered black"
+        },
+        "white_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.99,
+          "description": "Brightness above this is considered white"
+        },
+        "skip_checks": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skip quality checks for this workflow"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "paramDefinition": {
+      "type": "object",
+      "required": ["type", "patch"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "number", "boolean", "image"],
+          "description": "Parameter type"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this parameter is required"
+        },
+        "default": {
+          "description": "Default value if not provided"
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum value (for integer/number types)"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum value (for integer/number types)"
+        },
+        "choices": {
+          "type": "array",
+          "description": "Allowed values"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description"
+        },
+        "patch": {
+          "$ref": "#/$defs/patchDefinition"
+        }
+      }
+    },
+    "patchDefinition": {
+      "type": "object",
+      "required": ["node_id", "field"],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "description": "Node ID in the template"
+        },
+        "field": {
+          "type": "string",
+          "description": "Dot-notation path to the field (e.g., inputs.seed)"
+        }
+      }
+    }
+  }
+}

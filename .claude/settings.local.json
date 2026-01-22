@@ -6,7 +6,9 @@
       "WebFetch(domain:comfyanonymous.github.io)",
       "Bash(python -m pytest:*)",
       "Bash(pip install:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(dir /s \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\")",
+      "Bash(dir /s \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\\\\docs\")"
     ]
   }
 }

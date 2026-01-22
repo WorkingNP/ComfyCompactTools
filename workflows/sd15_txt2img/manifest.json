@@ -1,0 +1,155 @@
+{
+  "$schema": "../../docs/manifest.schema.json",
+  "id": "sd15_txt2img",
+  "name": "SD 1.5 Text to Image",
+  "description": "Classic Stable Diffusion 1.5 text-to-image workflow",
+  "version": "1.0.0",
+  "template_file": "template_api.json",
+
+  "params": {
+    "prompt": {
+      "type": "string",
+      "required": true,
+      "description": "The text prompt for image generation",
+      "patch": {
+        "node_id": "2",
+        "field": "inputs.text"
+      }
+    },
+    "negative_prompt": {
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Negative prompt (things to avoid)",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.text"
+      }
+    },
+    "checkpoint": {
+      "type": "string",
+      "required": false,
+      "default": "v1-5-pruned-emaonly.safetensors",
+      "description": "Checkpoint model file",
+      "patch": {
+        "node_id": "1",
+        "field": "inputs.ckpt_name"
+      }
+    },
+    "width": {
+      "type": "integer",
+      "required": false,
+      "default": 512,
+      "min": 64,
+      "max": 2048,
+      "description": "Output image width",
+      "patch": {
+        "node_id": "4",
+        "field": "inputs.width"
+      }
+    },
+    "height": {
+      "type": "integer",
+      "required": false,
+      "default": 512,
+      "min": 64,
+      "max": 2048,
+      "description": "Output image height",
+      "patch": {
+        "node_id": "4",
+        "field": "inputs.height"
+      }
+    },
+    "steps": {
+      "type": "integer",
+      "required": false,
+      "default": 20,
+      "min": 1,
+      "max": 150,
+      "description": "Number of sampling steps",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.steps"
+      }
+    },
+    "cfg": {
+      "type": "number",
+      "required": false,
+      "default": 7.0,
+      "min": 1.0,
+      "max": 30.0,
+      "description": "Classifier-free guidance scale",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.cfg"
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "required": false,
+      "default": -1,
+      "min": -1,
+      "max": 2147483647,
+      "description": "Random seed (-1 for random)",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.seed"
+      }
+    },
+    "sampler_name": {
+      "type": "string",
+      "required": false,
+      "default": "euler",
+      "description": "Sampling algorithm",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.sampler_name"
+      }
+    },
+    "scheduler": {
+      "type": "string",
+      "required": false,
+      "default": "normal",
+      "description": "Noise scheduler",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.scheduler"
+      }
+    },
+    "batch_size": {
+      "type": "integer",
+      "required": false,
+      "default": 1,
+      "min": 1,
+      "max": 16,
+      "description": "Number of images to generate",
+      "patch": {
+        "node_id": "4",
+        "field": "inputs.batch_size"
+      }
+    }
+  },
+
+  "presets": {
+    "default": {
+      "width": 512,
+      "height": 512,
+      "steps": 20,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal"
+    },
+    "highres": {
+      "width": 768,
+      "height": 768,
+      "steps": 30,
+      "cfg": 7.5
+    }
+  },
+
+  "quality_checks": {
+    "black_threshold": 0.01,
+    "white_threshold": 0.99,
+    "skip_checks": false
+  }
+}

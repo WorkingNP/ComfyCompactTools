@@ -19,3 +19,6 @@ package-lock.json
 
 # OS
 .DS_Store
+
+# Private folders
+Aurora攻略/

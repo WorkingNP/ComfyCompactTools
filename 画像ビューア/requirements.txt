@@ -1,0 +1,3 @@
+PySide6>=6.6
+# Optional: richer video thumbnails (first frame) in the grid.
+# opencv-python>=4.8

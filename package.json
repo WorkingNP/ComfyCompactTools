@@ -1,0 +1,30 @@
+{
+  "name": "grok-comfy-cockpit2",
+  "version": "1.0.0",
+  "description": "「ComfyUI を二度と触りたくない」ための、**固定3ペイン・キュー駆動・自動ギャラリー**のローカルWebアプリ（最小実装）です。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WorkingNP/ComfyCompactTools.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/WorkingNP/ComfyCompactTools/issues"
+  },
+  "homepage": "https://github.com/WorkingNP/ComfyCompactTools#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
+  }
+}

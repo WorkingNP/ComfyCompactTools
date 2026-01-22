@@ -4,8 +4,11 @@ __pycache__/
 .venv/
 venv/
 
-# Node (future)
+# Node
 node_modules/
+package-lock.json
+
+
 
 # Local data (keep only the placeholder)
 /data/

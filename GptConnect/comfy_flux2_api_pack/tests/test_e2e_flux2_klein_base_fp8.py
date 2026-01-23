@@ -6,8 +6,10 @@ import pytest
 from PIL import Image
 
 import comfy_flux2_klein_generate as klein
+from comfy_utils.image_checks import assert_not_blank_image
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(os.environ.get("RUN_KLEIN_BASE_TESTS", "0") != "1", reason="set RUN_KLEIN_BASE_TESTS=1 to run")
 def test_flux2_klein_base_fp8_generates_image(base_url, tmp_path):
     root = Path(__file__).resolve().parents[1]
@@ -59,3 +61,6 @@ def test_flux2_klein_base_fp8_generates_image(base_url, tmp_path):
     with Image.open(p) as im:
         im.load()
         assert im.size == (width, height), f"unexpected image size: {im.size} != {(width, height)}"
+
+    # Verify image is not blank (black/white)
+    assert_not_blank_image(p)

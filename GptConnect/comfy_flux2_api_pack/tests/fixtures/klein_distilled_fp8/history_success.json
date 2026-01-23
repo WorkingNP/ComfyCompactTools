@@ -1,0 +1,17 @@
+{
+  "outputs": {
+    "13": {
+      "images": [
+        {
+          "filename": "sample_output.png",
+          "subfolder": "",
+          "type": "output"
+        }
+      ]
+    }
+  },
+  "status": {
+    "status_str": "success",
+    "completed": true
+  }
+}

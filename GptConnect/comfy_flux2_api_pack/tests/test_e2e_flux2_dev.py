@@ -2,11 +2,14 @@ import os
 import uuid
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 import comfy_flux2_generate as dev
+from comfy_utils.image_checks import assert_not_blank_image
 
 
+@pytest.mark.e2e
 def test_flux2_dev_generates_image(base_url, tmp_path):
     root = Path(__file__).resolve().parents[1]
     template = root / "flux2_dev_prompt_template.json"
@@ -57,3 +60,6 @@ def test_flux2_dev_generates_image(base_url, tmp_path):
     with Image.open(p) as im:
         im.load()
         assert im.size == (width, height), f"unexpected image size: {im.size} != {(width, height)}"
+
+    # Verify image is not blank (black/white)
+    assert_not_blank_image(p)

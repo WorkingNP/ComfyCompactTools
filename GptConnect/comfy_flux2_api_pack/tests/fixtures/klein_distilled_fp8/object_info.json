@@ -1,0 +1,20 @@
+{
+  "CLIPLoader": {
+    "input": {},
+    "output": [
+      "CLIP"
+    ]
+  },
+  "UNETLoader": {
+    "input": {},
+    "output": [
+      "MODEL"
+    ]
+  },
+  "VAELoader": {
+    "input": {},
+    "output": [
+      "VAE"
+    ]
+  }
+}

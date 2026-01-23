@@ -6,6 +6,8 @@ import pytest
 import httpx
 from pathlib import Path
 
+from server.image_quality import check_image_quality, ImageQualityError
+
 # Mark all tests in this file as e2e
 pytestmark = pytest.mark.e2e
 
@@ -230,3 +232,11 @@ class TestFlux2KleinGeneration:
         asset = job_assets[0]
         assert "url" in asset
         assert asset["url"].startswith("/assets/")
+
+        # Download the image and check quality (not black/white/single-color)
+        asset_url = f"{SERVER_URL}{asset['url']}"
+        r = httpx.get(asset_url, timeout=30.0)
+        assert r.status_code == 200, f"Failed to download asset: {r.status_code}"
+
+        # Run image quality check - will raise ImageQualityError if image is blank
+        check_image_quality(r.content)

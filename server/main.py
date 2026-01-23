@@ -148,8 +148,8 @@ class JobCreate(BaseModel):
     prompt: str = Field(..., min_length=1)
     negative_prompt: str = "(worst quality, low quality:1.4), (deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), cloned face, malformed hands, long neck, extra breasts, mutated pussy, bad pussy, blurry, watermark, text, error, cropped"
 
-    # Workflow selection (new!)
-    workflow_id: Optional[str] = None  # None means use legacy build_txt2img_workflow
+    # Workflow selection (klein is the default)
+    workflow_id: str = "flux2_klein_distilled"
 
     # Core params
     width: int = 832
@@ -840,10 +840,8 @@ async def create_job(req: JobCreate) -> JobOut:
 
     job_id = str(uuid.uuid4())
 
-    # Check if using workflow registry (new path) or legacy path
-    use_workflow_registry = req.workflow_id is not None
-
-    if use_workflow_registry:
+    # Always use workflow registry (klein_distilled is default)
+    if True:
         # New workflow registry path
         try:
             wf = workflow_registry.get_workflow(req.workflow_id)

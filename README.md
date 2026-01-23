@@ -95,24 +95,34 @@ python -m uvicorn server.main:app --reload --host 127.0.0.1 --port 8787
 
 ---
 
-## Workflow Registry (New!)
+## Workflow Registry
 
-The cockpit now supports multiple workflows through a template + manifest architecture.
+The cockpit supports multiple workflows through a template + manifest architecture.
 
 ### Available Workflows
 
-- `sd15_txt2img` - Classic Stable Diffusion 1.5 text-to-image
-- `flux2_dev` - Flux 2 development model (may produce black images)
-- `flux2_klein_distilled` - Flux 2 Klein 4B distilled (fast, 4 steps)
+| Workflow ID | Description | Default |
+|-------------|-------------|---------|
+| `flux2_klein_distilled` | Flux 2 Klein 4B distilled (fast, 4 steps) | **Yes** |
+| `sd15_txt2img` | Classic Stable Diffusion 1.5 text-to-image | No |
 
 ### Using a Workflow
 
-Send a `workflow_id` parameter when creating a job:
+**Default workflow (flux2_klein_distilled):**
+
+```bash
+# workflow_id is optional - klein is the default
+curl -X POST http://127.0.0.1:8787/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "a cat"}'
+```
+
+**Specifying a different workflow:**
 
 ```bash
 curl -X POST http://127.0.0.1:8787/api/jobs \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "a cat", "workflow_id": "flux2_klein_distilled"}'
+  -d '{"prompt": "a cat", "workflow_id": "sd15_txt2img"}'
 ```
 
 ### API Endpoints
@@ -166,14 +176,16 @@ See `docs/03_manifest_spec.md` for full manifest documentation.
 
 ```bash
 # Unit + Integration tests (no ComfyUI required)
-pytest server/tests/ -v --ignore=server/tests/test_e2e*.py
+pytest server/tests/ -v -m "not e2e"
 
-# E2E tests (requires ComfyUI running)
-pytest server/tests/test_e2e*.py -v
+# E2E tests (requires ComfyUI + server running)
+pytest server/tests/ -v -m "e2e"
 
 # All tests
-pytest -v
+pytest server/tests/ -v
 ```
+
+**Note:** E2E tests are automatically skipped if ComfyUI or the server is not running.
 
 ---
 

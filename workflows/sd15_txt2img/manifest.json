@@ -150,6 +150,8 @@
   "quality_checks": {
     "black_threshold": 0.01,
     "white_threshold": 0.99,
+    "stddev_min": 0.01,
+    "min_bytes": 1000,
     "skip_checks": false
   }
 }

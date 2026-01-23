@@ -167,3 +167,44 @@ def comfy_available() -> bool:
 # Marker for E2E tests
 def pytest_configure(config):
     config.addinivalue_line("markers", "e2e: mark test as end-to-end (requires ComfyUI)")
+
+
+# ---------------------------------------------------------------------------
+# Real workflow fixtures (for manifest-driven testing)
+# ---------------------------------------------------------------------------
+
+def _repo_root() -> Path:
+    """Get the repository root directory."""
+    return Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture
+def klein_manifest() -> Dict[str, Any]:
+    """Load the actual flux2_klein_distilled manifest."""
+    manifest_path = _repo_root() / "workflows" / "flux2_klein_distilled" / "manifest.json"
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@pytest.fixture
+def klein_template() -> Dict[str, Any]:
+    """Load the actual flux2_klein_distilled template."""
+    template_path = _repo_root() / "workflows" / "flux2_klein_distilled" / "template_api.json"
+    with open(template_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@pytest.fixture
+def sd15_manifest() -> Dict[str, Any]:
+    """Load the actual sd15_txt2img manifest."""
+    manifest_path = _repo_root() / "workflows" / "sd15_txt2img" / "manifest.json"
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@pytest.fixture
+def sd15_template() -> Dict[str, Any]:
+    """Load the actual sd15_txt2img template."""
+    template_path = _repo_root() / "workflows" / "sd15_txt2img" / "template_api.json"
+    with open(template_path, "r", encoding="utf-8") as f:
+        return json.load(f)

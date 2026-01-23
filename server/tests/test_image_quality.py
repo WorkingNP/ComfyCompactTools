@@ -254,3 +254,170 @@ class TestSpecialFormats:
 
         # Should not raise
         check_image_quality(valid_rgba)
+
+
+class TestStddevCheck:
+    """Tests for standard deviation (low variance) detection."""
+
+    def test_low_variance_detected(self):
+        """Test that low variance images are detected with stddev_min."""
+        from server.image_quality import check_image_quality, ImageQualityError
+
+        # Create an image with very similar colors (low variance)
+        img = Image.new("RGB", (100, 100))
+        for x in range(100):
+            for y in range(100):
+                # Very slight variation around gray
+                r = 128 + (x % 2)
+                g = 128 + (y % 2)
+                b = 128
+                img.putpixel((x, y), (r, g, b))
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        low_variance = buffer.getvalue()
+
+        # With a high stddev_min threshold, should fail
+        with pytest.raises(ImageQualityError, match="low variance"):
+            check_image_quality(low_variance, stddev_min=0.1)
+
+    def test_high_variance_passes(self):
+        """Test that high variance images pass stddev check."""
+        from server.image_quality import check_image_quality
+
+        gradient = create_gradient_image()
+        # Should pass even with stddev_min set
+        check_image_quality(gradient, stddev_min=0.01)
+
+    def test_stddev_disabled_by_default(self):
+        """Test that stddev check is disabled when stddev_min=0."""
+        from server.image_quality import check_image_quality
+
+        # Low variance image should pass when stddev_min=0 (default)
+        img = Image.new("RGB", (100, 100))
+        for x in range(100):
+            for y in range(100):
+                r = 128 + (x % 2)
+                g = 128 + (y % 2)
+                b = 128
+                img.putpixel((x, y), (r, g, b))
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        low_variance = buffer.getvalue()
+
+        # Should pass with default stddev_min=0
+        check_image_quality(low_variance)
+
+
+class TestMinBytesCheck:
+    """Tests for minimum file size check."""
+
+    def test_small_file_detected(self):
+        """Test that small files are detected with min_bytes."""
+        from server.image_quality import check_image_quality, ImageQualityError
+
+        # Create a tiny valid image
+        img = Image.new("RGB", (10, 10), (128, 64, 192))
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        tiny_image = buffer.getvalue()
+
+        # With a high min_bytes threshold, should fail
+        with pytest.raises(ImageQualityError, match="file too small"):
+            check_image_quality(tiny_image, min_bytes=100000)
+
+    def test_large_file_passes(self):
+        """Test that large files pass min_bytes check."""
+        from server.image_quality import check_image_quality
+
+        large_image = create_noisy_image(size=(200, 200))
+        # Noisy images don't compress well, so this should exceed 1000 bytes
+        check_image_quality(large_image, min_bytes=1000)
+
+    def test_min_bytes_disabled_by_default(self):
+        """Test that min_bytes check is disabled when min_bytes=0."""
+        from server.image_quality import check_image_quality
+
+        # Tiny image should pass when min_bytes=0 (default)
+        img = Image.new("RGB", (10, 10), (128, 64, 192))
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        tiny_image = buffer.getvalue()
+
+        # Should pass with default min_bytes=0 (but may fail single-color check)
+        # Use gradient to avoid single-color
+        tiny_gradient = create_gradient_image(size=(10, 10))
+        check_image_quality(tiny_gradient)
+
+
+class TestManifestQualityParams:
+    """Tests for get_quality_params_from_manifest helper."""
+
+    def test_extract_params_from_manifest(self):
+        """Test extracting quality params from manifest."""
+        from server.image_quality import get_quality_params_from_manifest
+
+        manifest = {
+            "id": "test",
+            "quality_checks": {
+                "black_threshold": 0.02,
+                "white_threshold": 0.95,
+                "stddev_min": 0.05,
+                "min_bytes": 5000,
+                "skip_checks": False,
+            },
+        }
+
+        params = get_quality_params_from_manifest(manifest)
+        assert params["black_threshold"] == 0.02
+        assert params["white_threshold"] == 0.95
+        assert params["stddev_min"] == 0.05
+        assert params["min_bytes"] == 5000
+        assert params["skip_checks"] is False
+
+    def test_defaults_when_no_quality_checks(self):
+        """Test default values when quality_checks not present."""
+        from server.image_quality import get_quality_params_from_manifest
+
+        manifest = {"id": "test"}
+        params = get_quality_params_from_manifest(manifest)
+
+        assert params["black_threshold"] == 0.01
+        assert params["white_threshold"] == 0.99
+        assert params["stddev_min"] == 0.0
+        assert params["min_bytes"] == 0
+        assert params["skip_checks"] is False
+
+    def test_partial_quality_checks(self):
+        """Test partial quality_checks section uses defaults for missing."""
+        from server.image_quality import get_quality_params_from_manifest
+
+        manifest = {
+            "id": "test",
+            "quality_checks": {
+                "black_threshold": 0.05,
+                # Other fields missing
+            },
+        }
+
+        params = get_quality_params_from_manifest(manifest)
+        assert params["black_threshold"] == 0.05
+        assert params["white_threshold"] == 0.99  # default
+        assert params["stddev_min"] == 0.0  # default
+
+
+class TestGetImageInfo:
+    """Tests for get_image_info helper."""
+
+    def test_get_image_info_includes_size(self):
+        """Test that get_image_info returns file size."""
+        from server.image_quality import get_image_info
+
+        image_data = create_gradient_image()
+        info = get_image_info(image_data)
+
+        assert "width" in info
+        assert "height" in info
+        assert "size_bytes" in info
+        assert info["size_bytes"] == len(image_data)
+        assert info["width"] == 100
+        assert info["height"] == 100

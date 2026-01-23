@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import math
 from typing import Optional
 
 from PIL import Image
@@ -17,6 +18,8 @@ def check_image_quality(
     image_data: bytes,
     black_threshold: float = 0.01,
     white_threshold: float = 0.99,
+    stddev_min: float = 0.0,
+    min_bytes: int = 0,
     skip_checks: bool = False,
 ) -> None:
     """Check if an image passes quality checks.
@@ -25,11 +28,15 @@ def check_image_quality(
     - Pure black images (failed generation)
     - Pure white images (failed generation)
     - Single-color images (likely failed)
+    - Low variance images (stddev below threshold)
+    - Too small files (below min_bytes)
 
     Args:
         image_data: Raw image bytes (PNG, JPEG, etc.)
         black_threshold: Brightness below this is "black" (0-1)
         white_threshold: Brightness above this is "white" (0-1)
+        stddev_min: Minimum standard deviation of brightness (0-1 scale). 0 = disabled.
+        min_bytes: Minimum file size in bytes. 0 = disabled.
         skip_checks: If True, skip all checks
 
     Raises:
@@ -37,6 +44,12 @@ def check_image_quality(
     """
     if skip_checks:
         return
+
+    # Check minimum file size first
+    if min_bytes > 0 and len(image_data) < min_bytes:
+        raise ImageQualityError(
+            f"Image file too small: {len(image_data)} bytes (minimum: {min_bytes})"
+        )
 
     # Load image
     img = Image.open(io.BytesIO(image_data))
@@ -62,6 +75,7 @@ def check_image_quality(
 
     # Calculate statistics
     total_brightness = 0
+    brightness_values = []
     color_set = set()
     sample_size = min(num_pixels, 10000)  # Sample for large images
     step = max(1, num_pixels // sample_size)
@@ -70,10 +84,18 @@ def check_image_quality(
         r, g, b = pixels[i]
         brightness = (r + g + b) / (3 * 255)  # Normalize to 0-1
         total_brightness += brightness
+        brightness_values.append(brightness)
         color_set.add((r, g, b))
 
-    sampled_count = (num_pixels + step - 1) // step
+    sampled_count = len(brightness_values)
     avg_brightness = total_brightness / sampled_count
+
+    # Calculate standard deviation of brightness
+    if sampled_count > 1:
+        variance = sum((b - avg_brightness) ** 2 for b in brightness_values) / sampled_count
+        stddev = math.sqrt(variance)
+    else:
+        stddev = 0.0
 
     # Check for single color FIRST (more specific error)
     # But only if it's not black or white (those have their own checks)
@@ -117,6 +139,12 @@ def check_image_quality(
                     f"Image is a single color: RGB({dominant[0]}, {dominant[1]}, {dominant[2]})"
                 )
 
+    # Check for low variance (after single-color check to provide more specific error)
+    if stddev_min > 0 and stddev < stddev_min:
+        raise ImageQualityError(
+            f"Image has low variance (stddev: {stddev:.4f}, minimum: {stddev_min:.4f})"
+        )
+
 
 def get_image_info(image_data: bytes) -> dict:
     """Get basic information about an image.
@@ -125,7 +153,7 @@ def get_image_info(image_data: bytes) -> dict:
         image_data: Raw image bytes
 
     Returns:
-        Dict with width, height, mode, format info
+        Dict with width, height, mode, format, size info
     """
     img = Image.open(io.BytesIO(image_data))
     return {
@@ -133,4 +161,24 @@ def get_image_info(image_data: bytes) -> dict:
         "height": img.height,
         "mode": img.mode,
         "format": img.format,
+        "size_bytes": len(image_data),
+    }
+
+
+def get_quality_params_from_manifest(manifest: dict) -> dict:
+    """Extract quality check parameters from a workflow manifest.
+
+    Args:
+        manifest: Workflow manifest dict
+
+    Returns:
+        Dict with quality check parameters (can be passed to check_image_quality)
+    """
+    quality_checks = manifest.get("quality_checks", {})
+    return {
+        "black_threshold": quality_checks.get("black_threshold", 0.01),
+        "white_threshold": quality_checks.get("white_threshold", 0.99),
+        "stddev_min": quality_checks.get("stddev_min", 0.0),
+        "min_bytes": quality_checks.get("min_bytes", 0),
+        "skip_checks": quality_checks.get("skip_checks", False),
     }

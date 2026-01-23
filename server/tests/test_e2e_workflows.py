@@ -1,12 +1,17 @@
 """End-to-end tests for workflows (requires running ComfyUI)."""
 from __future__ import annotations
 
+import json
 import os
 import pytest
 import httpx
 from pathlib import Path
 
-from server.image_quality import check_image_quality, ImageQualityError
+from server.image_quality import (
+    check_image_quality,
+    get_quality_params_from_manifest,
+    ImageQualityError,
+)
 
 # Mark all tests in this file as e2e
 pytestmark = pytest.mark.e2e
@@ -238,5 +243,17 @@ class TestFlux2KleinGeneration:
         r = httpx.get(asset_url, timeout=30.0)
         assert r.status_code == 200, f"Failed to download asset: {r.status_code}"
 
-        # Run image quality check - will raise ImageQualityError if image is blank
-        check_image_quality(r.content)
+        # Load manifest to get workflow-specific quality thresholds
+        manifest_path = (
+            Path(__file__).resolve().parents[2]
+            / "workflows"
+            / "flux2_klein_distilled"
+            / "manifest.json"
+        )
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        quality_params = get_quality_params_from_manifest(manifest)
+
+        # Run image quality check with manifest-specified thresholds
+        check_image_quality(r.content, **quality_params)

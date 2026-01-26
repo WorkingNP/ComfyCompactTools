@@ -31,7 +31,25 @@
         </div>
 
         <details class="details" open>
-          <summary>基本設定</summary>
+          <summary>Workflow</summary>
+          <div>
+            <label class="label">Select Workflow</label>
+            <select id="workflowSelect" class="select">
+              <option value="">Loading...</option>
+            </select>
+            <div id="workflowDescription" class="hint" style="margin-top: 8px; font-size: 12px;"></div>
+          </div>
+        </details>
+
+        <details class="details" id="dynamicParamsSection" open>
+          <summary>Parameters</summary>
+          <div id="dynamicParams" class="grid2">
+            <!-- Dynamic form fields will be inserted here -->
+          </div>
+        </details>
+
+        <details class="details">
+          <summary>基本設定（レガシー）</summary>
           <div class="grid2">
             <div>
               <label class="label">Checkpoint</label>
@@ -175,6 +193,7 @@
             <button id="zoomFitBtn" class="btn">Fit</button>
           </div>
           <button id="favBtn" class="btn btn--star">Favorite</button>
+          <button id="rerunBtn" class="btn">Re-run</button>
           <button id="closeModalBtn" class="btn">Close</button>
         </div>
       </div>

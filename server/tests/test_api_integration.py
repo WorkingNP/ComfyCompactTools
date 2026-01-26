@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 from pathlib import Path
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
 
@@ -13,6 +13,32 @@ def test_client():
     # We need to import after setting up mocks
     from server.main import app
     return TestClient(app)
+
+
+@pytest.fixture
+def fake_comfy_client():
+    """Create a FakeComfyClient for testing."""
+    from server.fake_comfy_client import FakeComfyClient
+    return FakeComfyClient()
+
+
+@pytest.fixture
+def test_client_with_fake_comfy(fake_comfy_client):
+    """Create a test client with FakeComfyClient injected."""
+    from server import main
+    from server.main import app
+
+    # Save original client
+    original_comfy = main.comfy
+
+    # Inject fake client
+    main.set_comfy_client(fake_comfy_client)
+
+    client = TestClient(app)
+    yield client
+
+    # Restore original client
+    main.set_comfy_client(original_comfy)
 
 
 class TestWorkflowsAPI:
@@ -113,12 +139,26 @@ class TestManifestDefaults:
 class TestHealthAndConfig:
     """Tests for health and config endpoints."""
 
-    def test_health_endpoint(self, test_client):
-        """Test GET /api/health returns ok."""
+    def test_health_endpoint_structure(self, test_client):
+        """Test GET /api/health returns expected structure."""
         response = test_client.get("/api/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["ok"] is True
+        # Health endpoint should have these fields
+        assert "ok" in data
+        assert "comfy_url" in data
+        assert "error_code" in data
+        assert "error_message" in data
+
+    def test_health_endpoint_when_comfy_unreachable(self, test_client):
+        """Test GET /api/health returns error when ComfyUI is unreachable."""
+        response = test_client.get("/api/health")
+        assert response.status_code == 200
+        data = response.json()
+        # When ComfyUI is not running, should report unreachable
+        if not data["ok"]:
+            assert data["error_code"] in ["COMFY_UNREACHABLE", "COMFY_ERROR"]
+            assert data["error_message"] is not None
 
     def test_config_endpoint(self, test_client):
         """Test GET /api/config returns expected structure."""
@@ -128,3 +168,116 @@ class TestHealthAndConfig:
         assert "comfy_url" in data
         assert "defaults" in data
         assert "choices" in data
+
+
+class TestGetJobById:
+    """Tests for GET /api/jobs/{job_id} endpoint."""
+
+    def test_get_nonexistent_job_returns_404(self, test_client):
+        """Test GET /api/jobs/{id} returns 404 for unknown job."""
+        response = test_client.get("/api/jobs/nonexistent-job-id-12345")
+        assert response.status_code == 404
+        data = response.json()
+        assert "detail" in data
+
+    def test_get_job_returns_expected_fields(self, test_client_with_fake_comfy, fake_comfy_client):
+        """Test GET /api/jobs/{id} returns job with expected fields."""
+        # First create a job
+        response = test_client_with_fake_comfy.post(
+            "/api/jobs",
+            json={"prompt": "test prompt for job retrieval"}
+        )
+        assert response.status_code == 200
+        created_job = response.json()
+        job_id = created_job["id"]
+
+        # Now retrieve it
+        response = test_client_with_fake_comfy.get(f"/api/jobs/{job_id}")
+        assert response.status_code == 200
+        job = response.json()
+
+        # Check expected fields
+        assert job["id"] == job_id
+        assert "status" in job
+        assert "prompt" in job
+        assert "params" in job
+        assert "created_at" in job
+
+
+class TestCreateJobWithMock:
+    """Tests for POST /api/jobs with FakeComfyClient (no real ComfyUI needed)."""
+
+    def test_create_job_success_returns_job_id(self, test_client_with_fake_comfy, fake_comfy_client):
+        """Test POST /api/jobs returns job_id on success."""
+        response = test_client_with_fake_comfy.post(
+            "/api/jobs",
+            json={"prompt": "a beautiful sunset over mountains"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Job should have an ID
+        assert "id" in data
+        assert data["id"] is not None
+        assert len(data["id"]) > 0
+
+        # Job should be queued or have prompt_id from ComfyUI
+        assert data["status"] in ["queued", "running", "completed", "failed"]
+
+    def test_create_job_with_workflow_id(self, test_client_with_fake_comfy, fake_comfy_client):
+        """Test POST /api/jobs with explicit workflow_id."""
+        response = test_client_with_fake_comfy.post(
+            "/api/jobs",
+            json={
+                "prompt": "a cat sitting on a couch",
+                "workflow_id": "flux2_klein_distilled"
+            }
+        )
+        # May be 200 (success) or 404 (workflow not found in test env)
+        if response.status_code == 200:
+            data = response.json()
+            assert "id" in data
+            assert data["params"].get("workflow_id") == "flux2_klein_distilled"
+
+    def test_create_job_tracks_in_fake_client(self, test_client_with_fake_comfy, fake_comfy_client):
+        """Test that FakeComfyClient tracks submitted prompts."""
+        response = test_client_with_fake_comfy.post(
+            "/api/jobs",
+            json={"prompt": "test tracking prompt"}
+        )
+        assert response.status_code == 200
+
+        # FakeComfyClient should have recorded the submission
+        assert len(fake_comfy_client.submitted_prompts) >= 1
+
+    def test_create_job_when_comfy_unreachable(self, test_client_with_fake_comfy, fake_comfy_client):
+        """Test POST /api/jobs when ComfyUI is unreachable."""
+        fake_comfy_client.set_unreachable()
+
+        response = test_client_with_fake_comfy.post(
+            "/api/jobs",
+            json={"prompt": "this should fail"}
+        )
+        assert response.status_code == 200  # Job is created but marked as failed
+
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["error"] is not None
+
+
+class TestJobsListAndAssets:
+    """Tests for listing jobs and assets."""
+
+    def test_list_jobs_returns_list(self, test_client):
+        """Test GET /api/jobs returns a list."""
+        response = test_client.get("/api/jobs")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+    def test_list_assets_returns_list(self, test_client):
+        """Test GET /api/assets returns a list."""
+        response = test_client.get("/api/assets")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)

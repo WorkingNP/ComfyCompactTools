@@ -11,7 +11,8 @@
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui",
     "test:headed": "npx playwright test --headed",
-    "test:debug": "npx playwright test --debug"
+    "test:debug": "npx playwright test --debug",
+    "postinstall": "node scripts/fix-agent-browser-shim.js"
   },
   "repository": {
     "type": "git",
@@ -26,5 +27,8 @@
   "homepage": "https://github.com/WorkingNP/ComfyCompactTools#readme",
   "devDependencies": {
     "@playwright/test": "^1.57.0"
+  },
+  "dependencies": {
+    "agent-browser": "^0.7.6"
   }
 }

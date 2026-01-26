@@ -98,6 +98,18 @@ workflow_registry = WorkflowRegistry(Path(WORKFLOWS_DIR))
 ws_manager = WebSocketManager()
 comfy = ComfyClient(settings.comfy_url)
 
+
+def set_comfy_client(client: Any) -> None:
+    """Replace the ComfyUI client (for testing with FakeComfyClient)."""
+    global comfy
+    comfy = client
+
+
+def get_comfy_client() -> Any:
+    """Get the current ComfyUI client."""
+    return comfy
+
+
 # ComfyUI uses a 'clientId' in websocket query params.
 COMFY_CLIENT_ID = str(uuid.uuid4())
 
@@ -596,7 +608,41 @@ async def on_shutdown() -> None:
 
 @app.get("/api/health")
 async def health() -> Dict[str, Any]:
-    return {"ok": True, "comfy_url": settings.comfy_url}
+    """Health check with detailed ComfyUI connection status.
+
+    Returns error codes:
+    - COMFY_UNREACHABLE: Cannot connect to ComfyUI server
+    - COMFY_ERROR: ComfyUI returned an error
+    - None: Everything is OK
+    """
+    result: Dict[str, Any] = {
+        "ok": False,
+        "comfy_url": settings.comfy_url,
+        "error_code": None,
+        "error_message": None,
+    }
+
+    try:
+        # Try to get system stats from ComfyUI
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"{settings.comfy_url}/system_stats")
+            if r.status_code == 200:
+                result["ok"] = True
+                result["comfy_stats"] = r.json()
+            else:
+                result["error_code"] = "COMFY_ERROR"
+                result["error_message"] = f"ComfyUI returned status {r.status_code}"
+    except httpx.ConnectError:
+        result["error_code"] = "COMFY_UNREACHABLE"
+        result["error_message"] = "Cannot connect to ComfyUI server"
+    except httpx.TimeoutException:
+        result["error_code"] = "COMFY_UNREACHABLE"
+        result["error_message"] = "Connection to ComfyUI timed out"
+    except Exception as e:
+        result["error_code"] = "COMFY_ERROR"
+        result["error_message"] = str(e)
+
+    return result
 
 
 @app.get("/api/config")
@@ -1006,6 +1052,15 @@ async def create_job(req: JobCreate) -> JobOut:
 @app.get("/api/jobs", response_model=List[JobOut])
 async def list_jobs(limit: int = 200) -> List[JobOut]:
     return [jobrow_to_out(r) for r in db.list_jobs(limit=limit)]
+
+
+@app.get("/api/jobs/{job_id}", response_model=JobOut)
+async def get_job(job_id: str) -> JobOut:
+    """Get a single job by ID with status, progress, and metadata."""
+    row = db.get_job(job_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="job not found")
+    return jobrow_to_out(row)
 
 
 @app.get("/api/assets", response_model=List[AssetOut])

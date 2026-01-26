@@ -15,6 +15,8 @@ const state = {
   modalFitZoom: 1,
   templates: [],
   thumbSize: 200,
+  workflows: [], // Available workflows
+  selectedWorkflow: null, // Currently selected workflow detail (with params)
 };
 
 const GROK_HISTORY_TOGGLE_KEY = 'grokSendFullHistory';
@@ -66,21 +68,57 @@ async function apiPost(path, body) {
 }
 
 function readParamsFromUI() {
-  return {
-    prompt: $('#quickPrompt').value,
-    negative_prompt: $('#neg').value,
-    checkpoint: $('#checkpoint').value || null,
-    sampler_name: $('#sampler').value,
-    scheduler: $('#scheduler').value,
-    steps: Number($('#steps').value || 20),
-    cfg: Number($('#cfg').value || 7),
-    seed: Number($('#seed').value || -1),
-    width: Number($('#width').value || 512),
-    height: Number($('#height').value || 512),
-    batch_size: Number($('#batch').value || 1),
-    clip_skip: Number($('#clipSkip').value || 1),
-    vae: $('#vae').value === '(auto)' ? null : $('#vae').value,
-  };
+  const payload = {};
+
+  // If using dynamic workflow form
+  if (state.selectedWorkflow) {
+    payload.workflow_id = state.selectedWorkflow.id;
+
+    // Read all dynamic params
+    const dynamicInputs = document.querySelectorAll('#dynamicParams [data-param-name]');
+    for (const input of dynamicInputs) {
+      const paramName = input.getAttribute('data-param-name');
+      const paramType = input.getAttribute('data-param-type');
+
+      let value;
+      if (input.type === 'checkbox') {
+        value = input.checked;
+      } else if (paramType === 'integer') {
+        value = parseInt(input.value, 10);
+        if (isNaN(value)) value = 0;
+      } else if (paramType === 'float') {
+        value = parseFloat(input.value);
+        if (isNaN(value)) value = 0.0;
+      } else {
+        value = input.value;
+      }
+
+      payload[paramName] = value;
+    }
+
+    // Ensure prompt from quickPrompt takes priority if present
+    const quickPrompt = $('#quickPrompt');
+    if (quickPrompt && quickPrompt.value.trim()) {
+      payload.prompt = quickPrompt.value.trim();
+    }
+  } else {
+    // Legacy mode: use old fixed form
+    payload.prompt = $('#quickPrompt').value;
+    payload.negative_prompt = $('#neg').value;
+    payload.checkpoint = $('#checkpoint').value || null;
+    payload.sampler_name = $('#sampler').value;
+    payload.scheduler = $('#scheduler').value;
+    payload.steps = Number($('#steps').value || 20);
+    payload.cfg = Number($('#cfg').value || 7);
+    payload.seed = Number($('#seed').value || -1);
+    payload.width = Number($('#width').value || 512);
+    payload.height = Number($('#height').value || 512);
+    payload.batch_size = Number($('#batch').value || 1);
+    payload.clip_skip = Number($('#clipSkip').value || 1);
+    payload.vae = $('#vae').value === '(auto)' ? null : $('#vae').value;
+  }
+
+  return payload;
 }
 
 async function queuePrompt({ keepText }) {
@@ -154,27 +192,19 @@ function renderQueue() {
     requeueBtn.onclick = async () => {
       const promptText = (promptEl.value || '').trim();
       if (!promptText) return;
-      const recipe = {
-        prompt: promptText,
-        negative_prompt: j.negative_prompt,
-        ...(j.params || {}),
-      };
-      // Map recipe keys to api keys
+
+      const params = j.params || {};
+      const workflow_id = params.workflow_id;
+
+      // Build payload preserving workflow_id if present
       const payload = {
-        prompt: recipe.prompt,
-        negative_prompt: recipe.negative_prompt,
-        checkpoint: recipe.checkpoint ?? null,
-        sampler_name: recipe.sampler_name ?? 'euler',
-        scheduler: recipe.scheduler ?? 'normal',
-        steps: recipe.steps ?? 20,
-        cfg: recipe.cfg ?? 7,
-        seed: recipe.seed ?? -1,
-        width: recipe.width ?? 512,
-        height: recipe.height ?? 512,
-        batch_size: recipe.batch_size ?? 1,
-        clip_skip: recipe.clip_skip ?? 1,
-        vae: recipe.vae ?? null,
+        prompt: promptText,
+        ...params
       };
+
+      // Override prompt with edited value
+      payload.prompt = promptText;
+
       try {
         await apiPost('/api/jobs', payload);
       } catch (e) {
@@ -340,6 +370,150 @@ async function initTemplates() {
   const names = state.templates.map((t) => t.name);
   populateSelect(select, ['(none)', ...names], '(none)');
   updateTemplateNotes();
+}
+
+async function initWorkflows() {
+  try {
+    const workflows = await apiGet('/api/workflows');
+    state.workflows = Array.isArray(workflows) ? workflows : [];
+
+    const select = $('#workflowSelect');
+    if (!select) return;
+
+    if (state.workflows.length === 0) {
+      select.innerHTML = '<option value="">No workflows available</option>';
+      return;
+    }
+
+    // Populate workflow select
+    select.innerHTML = state.workflows.map(wf =>
+      `<option value="${wf.id}">${wf.name}</option>`
+    ).join('');
+
+    // Select first workflow by default
+    if (state.workflows.length > 0) {
+      select.value = state.workflows[0].id;
+      await loadWorkflowDetail(state.workflows[0].id);
+    }
+
+    // Setup change handler
+    select.addEventListener('change', async (e) => {
+      const workflowId = e.target.value;
+      if (workflowId) {
+        await loadWorkflowDetail(workflowId);
+      }
+    });
+  } catch (e) {
+    console.error('Failed to load workflows:', e);
+    state.workflows = [];
+  }
+}
+
+async function loadWorkflowDetail(workflowId) {
+  try {
+    const detail = await apiGet(`/api/workflows/${workflowId}`);
+    state.selectedWorkflow = detail;
+
+    // Update description
+    const descEl = $('#workflowDescription');
+    if (descEl) {
+      descEl.textContent = detail.description || 'No description available.';
+    }
+
+    // Generate dynamic form
+    generateDynamicForm(detail.params || {});
+  } catch (e) {
+    console.error('Failed to load workflow detail:', e);
+    state.selectedWorkflow = null;
+  }
+}
+
+function generateDynamicForm(params) {
+  const container = $('#dynamicParams');
+  if (!container) return;
+
+  container.innerHTML = ''; // Clear existing
+
+  // Sort params: required first, then optional
+  const entries = Object.entries(params).sort((a, b) => {
+    const aReq = a[1].required || false;
+    const bReq = b[1].required || false;
+    if (aReq && !bReq) return -1;
+    if (!aReq && bReq) return 1;
+    return a[0].localeCompare(b[0]);
+  });
+
+  for (const [paramName, paramDef] of entries) {
+    const div = document.createElement('div');
+
+    const label = document.createElement('label');
+    label.className = 'label';
+    label.textContent = paramDef.description || paramName;
+    if (paramDef.required) {
+      label.textContent += ' *';
+    }
+    div.appendChild(label);
+
+    let input;
+    const type = paramDef.type || 'string';
+
+    if (paramDef.choices && Array.isArray(paramDef.choices)) {
+      // Enum/choices -> select
+      input = document.createElement('select');
+      input.className = 'select';
+      input.innerHTML = paramDef.choices.map(choice =>
+        `<option value="${choice}">${choice}</option>`
+      ).join('');
+      if (paramDef.default !== undefined) {
+        input.value = paramDef.default;
+      }
+    } else if (type === 'boolean') {
+      // Boolean -> checkbox
+      input = document.createElement('input');
+      input.type = 'checkbox';
+      if (paramDef.default !== undefined) {
+        input.checked = !!paramDef.default;
+      }
+    } else if (type === 'integer') {
+      // Integer -> number input
+      input = document.createElement('input');
+      input.className = 'input';
+      input.type = 'number';
+      input.step = '1';
+      if (paramDef.min !== undefined) input.min = paramDef.min;
+      if (paramDef.max !== undefined) input.max = paramDef.max;
+      if (paramDef.default !== undefined) input.value = paramDef.default;
+    } else if (type === 'float') {
+      // Float -> number input
+      input = document.createElement('input');
+      input.className = 'input';
+      input.type = 'number';
+      input.step = '0.1';
+      if (paramDef.min !== undefined) input.min = paramDef.min;
+      if (paramDef.max !== undefined) input.max = paramDef.max;
+      if (paramDef.default !== undefined) input.value = paramDef.default;
+    } else {
+      // String (default) or prompt -> text input or textarea
+      if (paramName === 'prompt' || paramName === 'negative_prompt') {
+        input = document.createElement('textarea');
+        input.className = 'textarea';
+        input.rows = paramName === 'prompt' ? 4 : 2;
+        if (paramDef.default !== undefined) input.value = paramDef.default;
+      } else {
+        input = document.createElement('input');
+        input.className = 'input';
+        input.type = 'text';
+        if (paramDef.default !== undefined) input.value = paramDef.default;
+      }
+    }
+
+    input.id = `dynamic_${paramName}`;
+    input.setAttribute('data-param-name', paramName);
+    input.setAttribute('data-param-type', type);
+
+    div.appendChild(input);
+    container.appendChild(div);
+  }
 }
 
 function getSelectedTemplate() {
@@ -631,6 +805,71 @@ function closeModal() {
   $('#modal').classList.add('hidden');
 }
 
+async function rerunFromModal() {
+  const assetId = state.selectedAssetId;
+  if (!assetId) return;
+
+  const asset = state.assets.get(assetId);
+  if (!asset || !asset.recipe) return;
+
+  const recipe = asset.recipe;
+  const params = recipe.params || {};
+
+  // Restore prompt to quickPrompt textarea
+  if (recipe.prompt) {
+    const quickPrompt = $('#quickPrompt');
+    if (quickPrompt) {
+      quickPrompt.value = recipe.prompt;
+    }
+  }
+
+  // If workflow_id is present, switch to that workflow
+  if (params.workflow_id) {
+    const workflowSelect = $('#workflowSelect');
+    if (workflowSelect && workflowSelect.value !== params.workflow_id) {
+      workflowSelect.value = params.workflow_id;
+      // Trigger workflow load
+      await loadWorkflowDetail(params.workflow_id);
+    }
+
+    // Wait a tick for dynamic form to be generated
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Restore dynamic form values
+    for (const [paramName, paramValue] of Object.entries(params)) {
+      if (paramName === 'workflow_id') continue;
+
+      const input = document.querySelector(`#dynamicParams [data-param-name="${paramName}"]`);
+      if (input) {
+        if (input.type === 'checkbox') {
+          input.checked = !!paramValue;
+        } else {
+          input.value = paramValue;
+        }
+      }
+    }
+  } else {
+    // Legacy mode: restore to old fixed form
+    if (recipe.negative_prompt !== undefined) $('#neg').value = recipe.negative_prompt;
+    if (recipe.checkpoint) $('#checkpoint').value = recipe.checkpoint;
+    if (recipe.sampler_name) $('#sampler').value = recipe.sampler_name;
+    if (recipe.scheduler) $('#scheduler').value = recipe.scheduler;
+    if (params.steps !== undefined) $('#steps').value = params.steps;
+    if (params.cfg !== undefined) $('#cfg').value = params.cfg;
+    if (params.seed !== undefined) $('#seed').value = params.seed;
+    if (params.width !== undefined) $('#width').value = params.width;
+    if (params.height !== undefined) $('#height').value = params.height;
+    if (params.batch_size !== undefined) $('#batch').value = params.batch_size;
+    if (params.clip_skip !== undefined) $('#clipSkip').value = params.clip_skip;
+    if (params.vae) $('#vae').value = params.vae;
+  }
+
+  // Close modal and focus prompt
+  closeModal();
+  const quickPrompt = $('#quickPrompt');
+  if (quickPrompt) quickPrompt.focus();
+}
+
 async function toggleFavorite() {
   const id = state.selectedAssetId;
   if (!id) return;
@@ -665,6 +904,7 @@ function setupUI() {
   $('#closeModalBtn').onclick = closeModal;
   $('#modalBackdrop').onclick = closeModal;
   $('#favBtn').onclick = toggleFavorite;
+  $('#rerunBtn').onclick = rerunFromModal;
   const templateSelect = $('#templateSelect');
   const applyTemplateBtn = $('#applyTemplateBtn');
   const insertTriggersBtn = $('#insertTriggersBtn');
@@ -776,7 +1016,20 @@ async function initConfig() {
   const vaeList = ['(auto)', ...vaes];
   populateSelect($('#vae'), vaeList, defaults.vae || '(auto)');
 
-  setPill($('#comfyStatus'), `Comfy: ${cfg.comfy_url}`, 'pill--warn');
+  // Check ComfyUI health status
+  try {
+    const health = await apiGet('/api/health');
+    const comfyStatusEl = $('#comfyStatus');
+    if (health.ok) {
+      setPill(comfyStatusEl, `Comfy: connected`, 'pill--good');
+    } else if (health.error_code === 'COMFY_UNREACHABLE') {
+      setPill(comfyStatusEl, `Comfy: unreachable`, 'pill--bad');
+    } else {
+      setPill(comfyStatusEl, `Comfy: error (${health.error_code || 'unknown'})`, 'pill--bad');
+    }
+  } catch (e) {
+    setPill($('#comfyStatus'), `Comfy: check failed`, 'pill--bad');
+  }
 }
 
 function getSortedAssets() {
@@ -884,6 +1137,7 @@ function connectWS() {
 async function boot() {
   setupUI();
   await initConfig();
+  await initWorkflows(); // Load workflows and generate dynamic form
   await initTemplates();
   initGalleryControls();
   await initGrok();

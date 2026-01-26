@@ -8,7 +8,14 @@
       "Bash(pip install:*)",
       "Bash(python -c:*)",
       "Bash(dir /s \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\")",
-      "Bash(dir /s \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\\\\docs\")"
+      "Bash(dir /s \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\\\\docs\")",
+      "Bash(pytest:*)",
+      "Bash(timeout /t 3)",
+      "Bash(python -m server.main:*)",
+      "Bash(ping:*)",
+      "Bash(python -m uvicorn:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)"
     ]
   }
 }

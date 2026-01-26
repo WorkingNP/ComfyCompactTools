@@ -65,11 +65,27 @@ python -m uvicorn server.main:app --reload --host 127.0.0.1 --port 8787
 
 ## 使い方（MVP）
 
-- 左の `Prompt` に入力して **Enter** → 即Queue
-- 生成中でも Enter 連打でどんどん積める
-- 右の Gallery に生成結果が勝手に増える
-- サムネクリックで、画像とメタ情報（prompt/params）が見える
-- Favorite ボタンでお気に入り切替（DB保存）
+### 基本的な使い方
+
+1. **Workflow選択**
+   - 左の「Workflow」セクションでワークフローを選択
+   - Parametersセクションにmanifest駆動の動的フォームが生成される
+
+2. **画像生成**
+   - 左の `Prompt` に入力して **Enter** → 即Queue
+   - 生成中でも Enter 連打でどんどん積める
+   - 真ん中の Queue に生成状態が表示される
+   - 右の Gallery に生成結果が勝手に増える
+
+3. **画像の確認と再実行**
+   - サムネクリックで、画像とメタ情報（prompt/params/workflow_id）が見える
+   - Favorite ボタンでお気に入り切替（DB保存）
+   - **Re-run ボタンで同じパラメータを復元して再生成**
+
+4. **履歴機能**
+   - 過去の生成ジョブはQueue欄に残る
+   - 各ジョブの「Requeue」ボタンで再実行可能
+   - WebSocket接続時に自動的に履歴が読み込まれる
 
 ---
 
@@ -94,6 +110,38 @@ python -m uvicorn server.main:app --reload --host 127.0.0.1 --port 8787
 - ComfyUIの出力フォルダ設定や権限が変だと /view が失敗することがあります
 
 ---
+
+## UI Features (Phase 5)
+
+### Workflow選択とManifest駆動フォーム
+
+- UIは `/api/workflows` から利用可能なワークフローを取得
+- Workflow選択時に `/api/workflows/{id}` から params_schema を取得
+- manifest の `params` 定義に基づいて動的にフォームを生成
+  - `type: string` → text input / textarea
+  - `type: integer` → number input (with min/max/step)
+  - `type: float` → number input
+  - `type: boolean` → checkbox
+  - `choices` → select dropdown
+- 新しいワークフローを追加すると、自動的にUIに表示される（データ駆動）
+
+### Re-run機能
+
+- ギャラリーの画像をクリック→モーダル表示
+- 「Re-run」ボタンで元のworkflow_idとparamsをフォームに復元
+- プロンプトを編集して再生成も可能
+
+### Health Status
+
+- 起動時に `/api/health` をチェック
+- ComfyUIの接続状態を視覚的に表示
+  - 緑: 接続成功
+  - 赤: 接続失敗（unreachable / error）
+
+### ディレクトリトラバーサル対策
+
+- `/assets/{filename}` は FastAPI の StaticFiles で配信
+- ファイル名に `..` が含まれていても安全に処理される
 
 ## Workflow Registry
 
@@ -127,9 +175,41 @@ curl -X POST http://127.0.0.1:8787/api/jobs \
 
 ### API Endpoints
 
+**Workflows**
 - `GET /api/workflows` - List available workflows
 - `GET /api/workflows/{id}` - Get workflow details (params, presets)
 - `POST /api/workflows/reload` - Reload workflows after adding new ones
+
+**Jobs (Generation)**
+- `POST /api/jobs` - Create a new generation job
+- `GET /api/jobs` - List all jobs
+- `GET /api/jobs/{id}` - Get job status, progress, and metadata
+
+**Assets**
+- `GET /api/assets` - List all generated assets
+- `GET /api/assets/{id}` - Get asset details
+- `GET /assets/{filename}` - Download asset file
+
+**Health**
+- `GET /api/health` - Check server and ComfyUI connection status
+
+#### Example: Create and Monitor a Job
+
+```bash
+# 1. Create a job
+curl -X POST http://127.0.0.1:8787/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "a beautiful sunset"}' | jq
+
+# Response: {"id": "abc123...", "status": "queued", ...}
+
+# 2. Check job status
+curl http://127.0.0.1:8787/api/jobs/abc123... | jq
+
+# 3. Check health (includes ComfyUI connection status)
+curl http://127.0.0.1:8787/api/health | jq
+# Response: {"ok": true, "comfy_url": "...", "error_code": null, ...}
+```
 
 ### Adding a New Workflow
 

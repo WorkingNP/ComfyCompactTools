@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+import uuid
 from pathlib import Path
 from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
@@ -80,7 +81,7 @@ class TestJobsAPIValidation:
     """Tests for /api/jobs validation."""
 
     def test_create_job_empty_prompt_fails(self, test_client):
-        """Test that empty prompt returns 400."""
+        """Test that empty prompt returns 422."""
         response = test_client.post("/api/jobs", json={"prompt": ""})
         assert response.status_code == 422  # Pydantic validation error
 
@@ -203,6 +204,34 @@ class TestGetJobById:
         assert "params" in job
         assert "created_at" in job
 
+    def test_get_job_includes_outputs(self, test_client_with_fake_comfy):
+        """Completed jobs should include output asset references."""
+        from server import main
+
+        response = test_client_with_fake_comfy.post(
+            "/api/jobs",
+            json={"prompt": "job with assets"},
+        )
+        assert response.status_code == 200
+        job_id = response.json()["id"]
+
+        asset_id = str(uuid.uuid4())
+        main.db.create_asset(
+            asset_id=asset_id,
+            job_id=job_id,
+            engine="comfy",
+            filename="test_output.png",
+            recipe={"engine": "comfy"},
+            meta={},
+        )
+
+        response = test_client_with_fake_comfy.get(f"/api/jobs/{job_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "outputs" in data
+        assert len(data["outputs"]) == 1
+        assert data["outputs"][0]["filename"] == "test_output.png"
+
 
 class TestCreateJobWithMock:
     """Tests for POST /api/jobs with FakeComfyClient (no real ComfyUI needed)."""
@@ -263,6 +292,39 @@ class TestCreateJobWithMock:
         data = response.json()
         assert data["status"] == "failed"
         assert data["error"] is not None
+
+
+class TestJobParamsNormalization:
+    """Tests for new params dict handling and legacy compatibility."""
+
+    def test_create_job_with_params_dict_preserves_extra(self, test_client_with_fake_comfy):
+        """Should accept params dict and preserve extra fields in job params."""
+        payload = {
+            "workflow_id": "flux2_klein_distilled",
+            "params": {
+                "prompt": "a cat",
+                "width": 512,
+                "extra_param": 123,
+            },
+        }
+        response = test_client_with_fake_comfy.post("/api/jobs", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["params"]["workflow_id"] == "flux2_klein_distilled"
+        assert data["params"]["width"] == 512
+        assert data["params"]["extra_param"] == 123
+
+    def test_create_job_with_legacy_fields_populates_params(self, test_client_with_fake_comfy):
+        """Legacy top-level fields should be normalized into params."""
+        response = test_client_with_fake_comfy.post(
+            "/api/jobs",
+            json={"prompt": "legacy prompt", "width": 640, "height": 480},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["params"]["workflow_id"] == "flux2_klein_distilled"
+        assert data["params"]["width"] == 640
+        assert data["params"]["height"] == 480
 
 
 class TestJobsListAndAssets:

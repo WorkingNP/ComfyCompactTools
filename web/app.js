@@ -21,6 +21,23 @@ const state = {
 
 const GROK_HISTORY_TOGGLE_KEY = 'grokSendFullHistory';
 const GROK_MODEL_KEY = 'grokModel';
+let wsPingTimer = null;
+
+function stopWsPing() {
+  if (wsPingTimer) {
+    clearTimeout(wsPingTimer);
+    wsPingTimer = null;
+  }
+}
+
+function startWsPing(ws) {
+  stopWsPing();
+  const ping = () => {
+    if (ws.readyState === WebSocket.OPEN) ws.send('ping');
+    wsPingTimer = setTimeout(ping, 20000);
+  };
+  ping();
+}
 
 function setPill(el, text, kind) {
   el.textContent = text;
@@ -86,7 +103,7 @@ function readParamsFromUI() {
       } else if (paramType === 'integer') {
         value = parseInt(input.value, 10);
         if (isNaN(value)) value = 0;
-      } else if (paramType === 'float') {
+      } else if (paramType === 'float' || paramType === 'number') {
         value = parseFloat(input.value);
         if (isNaN(value)) value = 0.0;
       } else {
@@ -483,12 +500,12 @@ function generateDynamicForm(params) {
       if (paramDef.min !== undefined) input.min = paramDef.min;
       if (paramDef.max !== undefined) input.max = paramDef.max;
       if (paramDef.default !== undefined) input.value = paramDef.default;
-    } else if (type === 'float') {
-      // Float -> number input
+    } else if (type === 'float' || type === 'number') {
+      // Float/number -> number input
       input = document.createElement('input');
       input.className = 'input';
       input.type = 'number';
-      input.step = '0.1';
+      input.step = paramDef.step !== undefined ? String(paramDef.step) : '0.1';
       if (paramDef.min !== undefined) input.min = paramDef.min;
       if (paramDef.max !== undefined) input.max = paramDef.max;
       if (paramDef.default !== undefined) input.value = paramDef.default;
@@ -993,7 +1010,7 @@ async function initConfig() {
     vae: null,
     negative_prompt: '(worst quality, low quality:1.4), (deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), cloned face, malformed hands, long neck, extra breasts, mutated pussy, bad pussy, blurry, watermark, text, error, cropped',
   };
-  const defaults = { ...(cfg.defaults || {}), ...uiDefaults };
+  const defaults = { ...uiDefaults, ...(cfg.defaults || {}) };
   $('#steps').value = defaults.steps ?? 20;
   $('#cfg').value = defaults.cfg ?? 7;
   $('#seed').value = defaults.seed ?? -1;
@@ -1048,6 +1065,7 @@ function openAssetByOffset(offset) {
 }
 
 function connectWS() {
+  stopWsPing();
   const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${wsProto}://${location.host}/api/ws`;
 
@@ -1059,20 +1077,18 @@ function connectWS() {
   ws.onopen = () => {
     setPill($('#wsStatus'), 'WS: connected', 'pill--good');
     // Ping loop so the server-side receive loop doesn't idle forever.
-    const ping = () => {
-      if (ws.readyState === WebSocket.OPEN) ws.send('ping');
-      setTimeout(ping, 20000);
-    };
-    ping();
+    startWsPing(ws);
   };
 
   ws.onclose = () => {
     setPill($('#wsStatus'), 'WS: disconnected', 'pill--bad');
+    stopWsPing();
     setTimeout(connectWS, 1000);
   };
 
   ws.onerror = () => {
     setPill($('#wsStatus'), 'WS: error', 'pill--bad');
+    stopWsPing();
   };
 
   ws.onmessage = (ev) => {

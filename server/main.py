@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .comfy_client import ComfyClient
 from .comfy_workflow import build_txt2img_workflow
@@ -156,27 +156,46 @@ def _extract_chat_text(data: Dict[str, Any]) -> str:
     return json.dumps(data)[:2000]
 
 
-class JobCreate(BaseModel):
-    prompt: str = Field(..., min_length=1)
-    negative_prompt: str = "(worst quality, low quality:1.4), (deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), cloned face, malformed hands, long neck, extra breasts, mutated pussy, bad pussy, blurry, watermark, text, error, cropped"
+DEFAULT_NEGATIVE_PROMPT = (
+    "(worst quality, low quality:1.4), (deformed, distorted, disfigured:1.3), poorly drawn, "
+    "bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, "
+    "(mutated hands and fingers:1.4), cloned face, malformed hands, long neck, extra breasts, "
+    "mutated pussy, bad pussy, blurry, watermark, text, error, cropped"
+)
 
+
+class JobCreate(BaseModel):
     # Workflow selection (klein is the default)
     workflow_id: str = "flux2_klein_distilled"
 
-    # Core params
-    width: int = 832
-    height: int = 1024
-    steps: int = 20
-    cfg: float = 4.0
-    sampler_name: str = "euler_ancestral"
-    scheduler: str = "normal"
-    seed: int = -1
-    batch_size: int = 1
-    clip_skip: int = Field(1, ge=1, le=24)
+    # New-style, manifest-driven params
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+    # Legacy/compat fields (optional)
+    prompt: Optional[str] = None
+    negative_prompt: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    steps: Optional[int] = None
+    cfg: Optional[float] = None
+    sampler_name: Optional[str] = None
+    scheduler: Optional[str] = None
+    seed: Optional[int] = None
+    batch_size: Optional[int] = None
+    clip_skip: Optional[int] = Field(None, ge=1, le=24)
     vae: Optional[str] = None
 
     # Optional override
     checkpoint: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_prompt(self) -> "JobCreate":
+        prompt = self.prompt
+        if prompt is None and isinstance(self.params, dict):
+            prompt = self.params.get("prompt")
+        if prompt is None or str(prompt).strip() == "":
+            raise ValueError("prompt is required")
+        return self
 
 
 class JobOut(BaseModel):
@@ -191,6 +210,7 @@ class JobOut(BaseModel):
     updated_at: str
     progress_value: float
     progress_max: float
+    outputs: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -270,7 +290,7 @@ class WorkflowDetailOut(BaseModel):
     presets: Dict[str, Any] = {}
 
 
-def jobrow_to_out(row) -> JobOut:
+def jobrow_to_out(row, outputs: Optional[List[Dict[str, Any]]] = None) -> JobOut:
     params = json.loads(row.params_json) if row.params_json else {}
     return JobOut(
         id=row.id,
@@ -284,6 +304,7 @@ def jobrow_to_out(row) -> JobOut:
         updated_at=row.updated_at,
         progress_value=row.progress_value,
         progress_max=row.progress_max,
+        outputs=outputs or [],
         error=row.error,
     )
 
@@ -446,6 +467,42 @@ def _image_ext_from_url(url: str) -> str:
     path = url.split("?")[0]
     ext = os.path.splitext(path)[1]
     return ext if ext else ".png"
+
+
+def _normalize_job_params(req: JobCreate) -> Dict[str, Any]:
+    """Merge new-style params with legacy top-level fields.
+
+    Only explicitly provided values are included; None values are dropped.
+    """
+    params: Dict[str, Any] = {}
+    if isinstance(req.params, dict):
+        for key, value in req.params.items():
+            if value is not None:
+                params[key] = value
+
+    legacy_fields = [
+        "prompt",
+        "negative_prompt",
+        "width",
+        "height",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "seed",
+        "batch_size",
+        "clip_skip",
+        "vae",
+        "checkpoint",
+        "workflow_id",
+    ]
+    for field in legacy_fields:
+        if field in req.model_fields_set:
+            value = getattr(req, field)
+            if value is not None:
+                params[field] = value
+
+    return params
 
 
 async def harvest_assets_for_prompt(job_id: str, prompt_id: str) -> List[AssetOut]:
@@ -660,7 +717,7 @@ async def get_config() -> Dict[str, Any]:
             "batch_size": 1,
             "clip_skip": 2,
             "vae": None,
-            "negative_prompt": "(worst quality, low quality:1.4), (deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), cloned face, malformed hands, long neck, extra breasts, mutated pussy, bad pussy, blurry, watermark, text, error, cropped",
+            "negative_prompt": DEFAULT_NEGATIVE_PROMPT,
             "checkpoint": pick_checkpoint(None),
         },
         "choices": {
@@ -880,66 +937,74 @@ async def grok_image(req: GrokImageIn) -> List[AssetOut]:
 
 @app.post("/api/jobs", response_model=JobOut)
 async def create_job(req: JobCreate) -> JobOut:
-    prompt = req.prompt.strip()
+    normalized_params = _normalize_job_params(req)
+
+    prompt = str(normalized_params.get("prompt") or "").strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is empty")
+    normalized_params["prompt"] = prompt
 
     job_id = str(uuid.uuid4())
 
     # Always use workflow registry (klein_distilled is default)
     if True:
         # New workflow registry path
+        workflow_id = req.workflow_id
+        if "workflow_id" not in req.model_fields_set:
+            workflow_id = str(normalized_params.get("workflow_id") or workflow_id)
+
         try:
-            wf = workflow_registry.get_workflow(req.workflow_id)
+            wf = workflow_registry.get_workflow(workflow_id)
         except WorkflowNotFoundError:
-            raise HTTPException(status_code=404, detail=f"Workflow not found: {req.workflow_id}")
+            raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}")
 
         manifest = wf["manifest"]
         template = wf["template"]
         manifest_params = manifest.get("params", {})
 
-        # Build patch_params from ONLY explicitly provided fields
+        # Build patch_params from explicitly provided fields
         # This allows manifest defaults to be used for omitted fields
-        patch_params = {"prompt": prompt}
+        patch_params = {k: v for k, v in normalized_params.items() if k != "workflow_id"}
 
         # Map request fields to manifest param names
         # Some fields map to multiple params (e.g., width -> width, width_scheduler)
-        field_mappings = {
-            "negative_prompt": ["negative_prompt"],
-            "width": ["width", "width_scheduler"],
-            "height": ["height", "height_scheduler"],
-            "steps": ["steps"],
-            "cfg": ["cfg", "guidance"],  # cfg maps to both cfg and guidance for Flux2
-            "seed": ["seed"],
-            "batch_size": ["batch_size"],
-            "sampler_name": ["sampler_name"],
-            "scheduler": ["scheduler"],
+        mapping_defaults = {
+            "width": ["width_scheduler"],
+            "height": ["height_scheduler"],
+            "cfg": ["guidance"],  # cfg maps to both cfg and guidance for Flux2
         }
-
-        # Only add params that were explicitly set by the client
-        for field, param_names in field_mappings.items():
-            if field in req.model_fields_set:
-                value = getattr(req, field)
-                for param_name in param_names:
-                    if param_name in manifest_params:
-                        patch_params[param_name] = value
+        for source, targets in mapping_defaults.items():
+            if source in normalized_params:
+                for target in targets:
+                    if target in manifest_params and target not in patch_params:
+                        patch_params[target] = normalized_params[source]
 
         # Handle checkpoint specially (uses pick_checkpoint helper)
-        if "checkpoint" in req.model_fields_set and "checkpoint" in manifest_params:
-            patch_params["checkpoint"] = pick_checkpoint(req.checkpoint)
+        resolved_checkpoint: Optional[str] = None
+        if "checkpoint" in patch_params and "checkpoint" in manifest_params:
+            resolved_checkpoint = pick_checkpoint(patch_params.get("checkpoint"))
+            patch_params["checkpoint"] = resolved_checkpoint
+        elif "checkpoint" in patch_params and "checkpoint" not in manifest_params:
+            patch_params.pop("checkpoint", None)
 
-        # Store params for job record (only explicitly set values)
-        params = {"workflow_id": req.workflow_id}
-        for field in ["width", "height", "steps", "cfg", "sampler_name", "scheduler", "seed", "batch_size"]:
-            if field in req.model_fields_set:
-                params[field] = getattr(req, field)
+        # Store params for job record (preserve extra params for re-run)
+        params = dict(normalized_params)
+        params["workflow_id"] = workflow_id
+        if resolved_checkpoint is not None:
+            params["checkpoint"] = resolved_checkpoint
+
+        negative_prompt = params.get("negative_prompt")
+        if negative_prompt is None:
+            negative_prompt = ""
+        else:
+            negative_prompt = str(negative_prompt)
 
         db.create_job(
             job_id=job_id,
             engine="comfy",
             status="queued",
             prompt=prompt,
-            negative_prompt=req.negative_prompt or "",
+            negative_prompt=negative_prompt,
             params=params,
         )
 
@@ -1060,7 +1125,17 @@ async def get_job(job_id: str) -> JobOut:
     row = db.get_job(job_id)
     if not row:
         raise HTTPException(status_code=404, detail="job not found")
-    return jobrow_to_out(row)
+    assets = db.list_assets_by_job(job_id)
+    outputs = [
+        {
+            "id": a.id,
+            "filename": a.filename,
+            "url": f"/assets/{a.filename}",
+            "created_at": a.created_at,
+        }
+        for a in assets
+    ]
+    return jobrow_to_out(row, outputs=outputs)
 
 
 @app.get("/api/assets", response_model=List[AssetOut])

@@ -115,7 +115,9 @@ def images_generate(
         while True:
             all_done = True
             for job_info in jobs:
-                if job_info["status"] in ("queued", "running"):
+                if job_info["status"] in ("queued", "running") or (
+                    job_info["status"] == "completed" and not job_info["outputs"]
+                ):
                     # Poll job status
                     job_id = job_info["job_id"]
                     try:
@@ -137,12 +139,15 @@ def images_generate(
                                         asset_urls.append(output)
                                     else:
                                         asset_urls.append(f"{base_url}/assets/{output}")
-                            job_info["outputs"] = asset_urls
+                            if asset_urls:
+                                job_info["outputs"] = asset_urls
                     except Exception as e:
                         job_info["status"] = "failed"
                         job_info["error"] = str(e)
 
-                if job_info["status"] not in ("completed", "failed"):
+                if job_info["status"] not in ("completed", "failed") or (
+                    job_info["status"] == "completed" and not job_info["outputs"]
+                ):
                     all_done = False
 
             if all_done:
@@ -225,7 +230,9 @@ def images_generate_many(
     while True:
         all_done = True
         for result in results:
-            if result["status"] in ("queued", "running"):
+            if result["status"] in ("queued", "running") or (
+                result["status"] == "completed" and not result["outputs"]
+            ):
                 job_id = result["job_id"]
                 try:
                     job_status = client.get_job(job_id)
@@ -243,12 +250,15 @@ def images_generate_many(
                                     asset_urls.append(output)
                                 else:
                                     asset_urls.append(f"{base_url}/assets/{output}")
-                        result["outputs"] = asset_urls
+                        if asset_urls:
+                            result["outputs"] = asset_urls
                 except Exception as e:
                     result["status"] = "failed"
                     result["error"] = str(e)
 
-            if result["status"] not in ("completed", "failed"):
+            if result["status"] not in ("completed", "failed") or (
+                result["status"] == "completed" and not result["outputs"]
+            ):
                 all_done = False
 
         if all_done:

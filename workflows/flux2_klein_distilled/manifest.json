@@ -125,7 +125,7 @@
       "required": false,
       "default": 1,
       "min": 1,
-      "max": 8,
+      "max": 200,
       "description": "Number of images to generate",
       "patch": {
         "node_id": "7",

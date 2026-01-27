@@ -239,6 +239,14 @@ class Database:
             ).fetchall()
         return [AssetRow(**dict(r)) for r in rows]
 
+    def list_assets_by_job(self, job_id: str) -> List[AssetRow]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM assets WHERE job_id = ? ORDER BY created_at DESC;",
+                (job_id,),
+            ).fetchall()
+        return [AssetRow(**dict(r)) for r in rows]
+
     def get_asset(self, asset_id: str) -> Optional[AssetRow]:
         with self._lock:
             row = self._conn.execute("SELECT * FROM assets WHERE id = ?;", (asset_id,)).fetchone()

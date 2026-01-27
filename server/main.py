@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
 import json
 import os
 import sys
@@ -21,6 +22,7 @@ from .comfy_client import ComfyClient
 from .comfy_workflow import build_txt2img_workflow
 from .db import Database
 from .events import WebSocketManager
+from .model_scanner import scan_checkpoints, scan_vaes
 from .storage import ensure_dir, new_asset_filename, write_bytes
 from .workflow_registry import WorkflowRegistry, WorkflowNotFoundError
 from .workflow_patcher import apply_patch, PatchError
@@ -40,6 +42,9 @@ class Settings:
     xai_base_url: str
     xai_model: str
     xai_models: List[str]
+    # Model directory paths
+    checkpoints_dir: str
+    vae_dir: str
 
 
 def get_settings() -> Settings:
@@ -76,6 +81,16 @@ def get_settings() -> Settings:
         xai_base_url=str(config.get("xai_base_url") or os.getenv("XAI_BASE_URL", "https://api.x.ai/v1")).rstrip("/"),
         xai_model=xai_model,
         xai_models=models or ([xai_model] if xai_model else []),
+        checkpoints_dir=str(
+            config.get("checkpoints_dir") or
+            os.getenv("COMFY_CHECKPOINTS_DIR",
+                      r"C:\Users\souto\Desktop\ComfyUI_windows_portable\ComfyUI\models\checkpoints")
+        ),
+        vae_dir=str(
+            config.get("vae_dir") or
+            os.getenv("COMFY_VAE_DIR",
+                      r"C:\Users\souto\Desktop\ComfyUI_windows_portable\ComfyUI\models\vae")
+        ),
     )
 
 
@@ -798,16 +813,31 @@ async def list_workflows() -> List[WorkflowOut]:
 
 @app.get("/api/workflows/{workflow_id}", response_model=WorkflowDetailOut)
 async def get_workflow(workflow_id: str) -> WorkflowDetailOut:
-    """Get workflow details including parameters."""
+    """Get workflow details including parameters with dynamic choices."""
     try:
         wf = workflow_registry.get_workflow(workflow_id)
         manifest = wf["manifest"]
+
+        # Deep copy params to avoid mutating cached manifest
+        params = copy.deepcopy(manifest.get("params", {}))
+
+        # Inject dynamic choices for checkpoint/VAE
+        if "checkpoint" in params:
+            checkpoints = scan_checkpoints(settings.checkpoints_dir)
+            if checkpoints:
+                params["checkpoint"]["choices"] = checkpoints
+
+        if "vae" in params:
+            vaes = scan_vaes(settings.vae_dir)
+            if vaes:
+                params["vae"]["choices"] = vaes
+
         return WorkflowDetailOut(
             id=manifest["id"],
             name=manifest["name"],
             description=manifest.get("description", ""),
             version=manifest.get("version", ""),
-            params=manifest.get("params", {}),
+            params=params,
             presets=manifest.get("presets", {}),
         )
     except WorkflowNotFoundError:
@@ -935,8 +965,91 @@ async def grok_image(req: GrokImageIn) -> List[AssetOut]:
     return created
 
 
+async def _submit_prompt_background(
+    job_id: str,
+    template: Dict[str, Any],
+    manifest: Dict[str, Any],
+    patch_params: Dict[str, Any],
+) -> None:
+    """
+    Background task to submit workflow to ComfyUI (workflow registry path).
+    This prevents blocking the API response while ComfyUI loads models.
+    """
+    import time
+    bg_start = time.time()
+    print(f"[DEBUG] Background task started for job {job_id}", file=sys.stderr)
+    try:
+        # Apply patches to template
+        workflow = apply_patch(template, manifest, patch_params)
+        print(f"[DEBUG] Patch applied for job {job_id}, elapsed: {time.time() - bg_start:.3f}s", file=sys.stderr)
+
+        print(f"[DEBUG] Submitting to ComfyUI for job {job_id}...", file=sys.stderr)
+        res = await comfy.submit_prompt(workflow, COMFY_CLIENT_ID)
+        print(f"[DEBUG] ComfyUI submission completed for job {job_id}, elapsed: {time.time() - bg_start:.3f}s", file=sys.stderr)
+        prompt_id = res.get("prompt_id")
+        if not prompt_id:
+            raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
+
+        db.update_job(job_id, prompt_id=str(prompt_id))
+        await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+    except PatchError as e:
+        print(f"[ERROR] Background submit failed for job {job_id}: Patch error: {e}", file=sys.stderr)
+        db.update_job(job_id, status="failed", error=f"Patch error: {e}")
+        await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+    except Exception as e:
+        print(f"[ERROR] Background submit failed for job {job_id}: {e}", file=sys.stderr)
+        db.update_job(job_id, status="failed", error=str(e))
+        await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+
+async def _submit_legacy_workflow_background(
+    job_id: str,
+    prompt: str,
+    negative_prompt: str,
+    params: Dict[str, Any],
+) -> None:
+    """
+    Background task to submit legacy workflow to ComfyUI.
+    This prevents blocking the API response while ComfyUI loads models.
+    """
+    try:
+        workflow = build_txt2img_workflow(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            checkpoint=params["checkpoint"],
+            width=params["width"],
+            height=params["height"],
+            steps=params["steps"],
+            cfg=params["cfg"],
+            sampler_name=params["sampler_name"],
+            scheduler=params["scheduler"],
+            seed=params["seed"],
+            batch_size=params["batch_size"],
+            clip_skip=params["clip_skip"],
+            vae=params["vae"],
+        )
+
+        res = await comfy.submit_prompt(workflow, COMFY_CLIENT_ID)
+        prompt_id = res.get("prompt_id")
+        if not prompt_id:
+            raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
+
+        db.update_job(job_id, prompt_id=str(prompt_id))
+        await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+    except Exception as e:
+        print(f"[ERROR] Background legacy submit failed for job {job_id}: {e}", file=sys.stderr)
+        db.update_job(job_id, status="failed", error=str(e))
+        await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+
+
 @app.post("/api/jobs", response_model=JobOut)
 async def create_job(req: JobCreate) -> JobOut:
+    import time
+    start_time = time.time()
+    print(f"[DEBUG] create_job started at {start_time}", file=sys.stderr)
+
     normalized_params = _normalize_job_params(req)
 
     prompt = str(normalized_params.get("prompt") or "").strip()
@@ -945,6 +1058,7 @@ async def create_job(req: JobCreate) -> JobOut:
     normalized_params["prompt"] = prompt
 
     job_id = str(uuid.uuid4())
+    print(f"[DEBUG] job_id created: {job_id}, elapsed: {time.time() - start_time:.3f}s", file=sys.stderr)
 
     # Always use workflow registry (klein_distilled is default)
     if True:
@@ -955,6 +1069,7 @@ async def create_job(req: JobCreate) -> JobOut:
 
         try:
             wf = workflow_registry.get_workflow(workflow_id)
+            print(f"[DEBUG] workflow loaded: {workflow_id}, elapsed: {time.time() - start_time:.3f}s", file=sys.stderr)
         except WorkflowNotFoundError:
             raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}")
 
@@ -1007,27 +1122,14 @@ async def create_job(req: JobCreate) -> JobOut:
             negative_prompt=negative_prompt,
             params=params,
         )
+        print(f"[DEBUG] job created in DB, elapsed: {time.time() - start_time:.3f}s", file=sys.stderr)
 
         await ws_manager.broadcast({"type": "job_created", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+        print(f"[DEBUG] broadcast sent, elapsed: {time.time() - start_time:.3f}s", file=sys.stderr)
 
-        try:
-            # Apply patches to template
-            workflow = apply_patch(template, manifest, patch_params)
-
-            res = await comfy.submit_prompt(workflow, COMFY_CLIENT_ID)
-            prompt_id = res.get("prompt_id")
-            if not prompt_id:
-                raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
-
-            db.update_job(job_id, prompt_id=str(prompt_id))
-            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
-
-        except PatchError as e:
-            db.update_job(job_id, status="failed", error=f"Patch error: {e}")
-            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
-        except Exception as e:
-            db.update_job(job_id, status="failed", error=str(e))
-            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+        # Submit to ComfyUI in background to avoid blocking the API response
+        asyncio.create_task(_submit_prompt_background(job_id, template, manifest, patch_params))
+        print(f"[DEBUG] background task created, elapsed: {time.time() - start_time:.3f}s", file=sys.stderr)
 
     else:
         # Legacy path: use build_txt2img_workflow for backward compatibility
@@ -1081,36 +1183,16 @@ async def create_job(req: JobCreate) -> JobOut:
 
         await ws_manager.broadcast({"type": "job_created", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
 
-        try:
-            workflow = build_txt2img_workflow(
-                prompt=prompt,
-                negative_prompt=req.negative_prompt or "",
-                checkpoint=params["checkpoint"],
-                width=req.width,
-                height=req.height,
-                steps=req.steps,
-                cfg=req.cfg,
-                sampler_name=params["sampler_name"],
-                scheduler=params["scheduler"],
-                seed=req.seed,
-                batch_size=req.batch_size,
-                clip_skip=req.clip_skip,
-                vae=params["vae"],
-            )
-
-            res = await comfy.submit_prompt(workflow, COMFY_CLIENT_ID)
-            prompt_id = res.get("prompt_id")
-            if not prompt_id:
-                raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
-
-            db.update_job(job_id, prompt_id=str(prompt_id))
-            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
-
-        except Exception as e:
-            db.update_job(job_id, status="failed", error=str(e))
-            await ws_manager.broadcast({"type": "job_update", "payload": jobrow_to_out(db.get_job(job_id)).model_dump()})
+        # Submit to ComfyUI in background to avoid blocking the API response
+        asyncio.create_task(_submit_legacy_workflow_background(
+            job_id=job_id,
+            prompt=prompt,
+            negative_prompt=req.negative_prompt or "",
+            params=params,
+        ))
 
     row = db.get_job(job_id)
+    print(f"[DEBUG] returning response, elapsed: {time.time() - start_time:.3f}s", file=sys.stderr)
     return jobrow_to_out(row)
 
 

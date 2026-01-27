@@ -1,0 +1,177 @@
+{
+  "$schema": "../../docs/manifest.schema.json",
+  "id": "sdxl_txt2img",
+  "name": "SDXL Text to Image",
+  "description": "Stable Diffusion XL 1.0 text-to-image workflow with external VAE support",
+  "version": "1.0.0",
+  "template_file": "template_api.json",
+
+  "params": {
+    "prompt": {
+      "type": "string",
+      "required": true,
+      "description": "The text prompt for image generation",
+      "patch": {
+        "node_id": "2",
+        "field": "inputs.text"
+      }
+    },
+    "negative_prompt": {
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Negative prompt (things to avoid)",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.text"
+      }
+    },
+    "checkpoint": {
+      "type": "string",
+      "required": false,
+      "default": "sd_xl_base_1.0.safetensors",
+      "description": "SDXL checkpoint model file",
+      "patch": {
+        "node_id": "1",
+        "field": "inputs.ckpt_name"
+      }
+    },
+    "vae": {
+      "type": "string",
+      "required": false,
+      "default": "sdxl_vae.safetensors",
+      "description": "External VAE model file (leave empty to use checkpoint VAE)",
+      "patch": {
+        "node_id": "8",
+        "field": "inputs.vae_name"
+      }
+    },
+    "width": {
+      "type": "integer",
+      "required": false,
+      "default": 1024,
+      "min": 512,
+      "max": 2048,
+      "description": "Output image width (multiples of 64 recommended)",
+      "patch": {
+        "node_id": "4",
+        "field": "inputs.width"
+      }
+    },
+    "height": {
+      "type": "integer",
+      "required": false,
+      "default": 1024,
+      "min": 512,
+      "max": 2048,
+      "description": "Output image height (multiples of 64 recommended)",
+      "patch": {
+        "node_id": "4",
+        "field": "inputs.height"
+      }
+    },
+    "steps": {
+      "type": "integer",
+      "required": false,
+      "default": 30,
+      "min": 1,
+      "max": 150,
+      "description": "Number of sampling steps",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.steps"
+      }
+    },
+    "cfg": {
+      "type": "number",
+      "required": false,
+      "default": 7.5,
+      "min": 1.0,
+      "max": 30.0,
+      "description": "Classifier-free guidance scale",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.cfg"
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "required": false,
+      "default": -1,
+      "min": -1,
+      "max": 2147483647,
+      "description": "Random seed (-1 for random)",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.seed"
+      }
+    },
+    "sampler_name": {
+      "type": "string",
+      "required": false,
+      "default": "dpmpp_2m",
+      "description": "Sampling algorithm",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.sampler_name"
+      }
+    },
+    "scheduler": {
+      "type": "string",
+      "required": false,
+      "default": "karras",
+      "description": "Noise scheduler",
+      "patch": {
+        "node_id": "5",
+        "field": "inputs.scheduler"
+      }
+    },
+    "batch_size": {
+      "type": "integer",
+      "required": false,
+      "default": 1,
+      "min": 1,
+      "max": 16,
+      "description": "Number of images to generate",
+      "patch": {
+        "node_id": "4",
+        "field": "inputs.batch_size"
+      }
+    }
+  },
+
+  "presets": {
+    "default": {
+      "width": 1024,
+      "height": 1024,
+      "steps": 30,
+      "cfg": 7.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras"
+    },
+    "portrait": {
+      "width": 896,
+      "height": 1152
+    },
+    "landscape": {
+      "width": 1216,
+      "height": 832
+    },
+    "fast": {
+      "steps": 20,
+      "cfg": 6.0
+    },
+    "quality": {
+      "steps": 40,
+      "cfg": 8.0
+    }
+  },
+
+  "quality_checks": {
+    "black_threshold": 0.01,
+    "white_threshold": 0.99,
+    "stddev_min": 0.01,
+    "min_bytes": 2000,
+    "skip_checks": false
+  }
+}

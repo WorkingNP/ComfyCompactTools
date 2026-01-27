@@ -153,6 +153,40 @@ The cockpit supports multiple workflows through a template + manifest architectu
 |-------------|-------------|---------|
 | `flux2_klein_distilled` | Flux 2 Klein 4B distilled (fast, 4 steps) | **Yes** |
 | `sd15_txt2img` | Classic Stable Diffusion 1.5 text-to-image | No |
+| `sdxl_txt2img` | Stable Diffusion XL 1.0 text-to-image with external VAE | No |
+
+### SDXL Workflow
+
+The SDXL (Stable Diffusion XL) workflow supports:
+- **Checkpoint selection** from local models directory
+- **External VAE selection** (separate VAE loader for better quality)
+- **SDXL-optimized defaults** (1024x1024, 30 steps)
+- Full control over sampler, scheduler, CFG, seed, and batch size
+
+#### Configuration
+
+Configure model directories in `config.json`:
+
+```json
+{
+  "checkpoints_dir": "C:\\Users\\souto\\Desktop\\ComfyUI_windows_portable\\ComfyUI\\models\\checkpoints",
+  "vae_dir": "C:\\Users\\souto\\Desktop\\ComfyUI_windows_portable\\ComfyUI\\models\\vae"
+}
+```
+
+Or via environment variables:
+
+```bash
+# Windows (PowerShell)
+$env:COMFY_CHECKPOINTS_DIR="C:\path\to\checkpoints"
+$env:COMFY_VAE_DIR="C:\path\to\vae"
+
+# Linux/Mac
+export COMFY_CHECKPOINTS_DIR="/path/to/checkpoints"
+export COMFY_VAE_DIR="/path/to/vae"
+```
+
+The workflow dynamically populates dropdown choices based on available models in these directories.
 
 ### Using a Workflow
 
@@ -248,7 +282,9 @@ curl http://127.0.0.1:8787/api/health | jq
 
 5. Reload workflows: `POST /api/workflows/reload`
 
-See `docs/03_manifest_spec.md` for full manifest documentation.
+**Dynamic Model Choices:** If your workflow has `checkpoint` or `vae` parameters, the system will automatically populate their dropdown choices by scanning the configured model directories (`checkpoints_dir` and `vae_dir` in settings).
+
+See `docs/03_manifest_spec.md` for full manifest documentation and examples (`flux2_klein_distilled`, `sd15_txt2img`, `sdxl_txt2img`).
 
 ---
 

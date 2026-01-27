@@ -21,7 +21,8 @@
       "Bash(dir /b:*)",
       "Bash(head:*)",
       "Bash(tail:*)",
-      "mcp__codex__codex"
+      "mcp__codex__codex",
+      "Bash(ls -la \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\\\\workflows\"\" 2>/dev/null || echo \"Directory not found \")"
     ]
   },
   "enableAllProjectMcpServers": true,

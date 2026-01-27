@@ -269,6 +269,74 @@ pytest server/tests/ -v
 
 ---
 
+## MCP Server (Phase 6)
+
+Cockpit now includes an MCP (Model Context Protocol) server that allows LLMs (like Codex, Claude, or local LLMs) to generate images via tool calls.
+
+### Starting the MCP Server
+
+```bash
+# Default: connects to http://127.0.0.1:8787
+python -m server
+
+# Custom Cockpit URL:
+COCKPIT_BASE_URL=http://localhost:8787 python -m server
+```
+
+### Configuring in Claude Desktop (or Codex)
+
+Add to your `claude_desktop_config.json` (or equivalent):
+
+```json
+{
+  "mcpServers": {
+    "cockpit-image-generator": {
+      "command": "python",
+      "args": ["-m", "server"],
+      "cwd": "C:/path/to/grok-comfy-cockpit2",
+      "env": {
+        "COCKPIT_BASE_URL": "http://127.0.0.1:8787"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+1. **workflows_list** - List all available workflows
+2. **workflow_get** - Get workflow details and parameters
+3. **images_generate** - Generate images (with polling until complete)
+   - Supports `count` parameter to generate multiple images with same params
+   - Returns image URLs ready to display
+4. **images_generate_many** - Batch generate with multiple prompts
+   - Perfect for "generate 10 variations" use cases
+
+### Example Usage (from LLM)
+
+```
+User: "Generate 3 images of cats with different styles"
+
+LLM calls:
+  images_generate_many(
+    prompts=["a realistic cat", "a cartoon cat", "a cyberpunk cat"],
+    workflow_id="flux2_klein_distilled",
+    base_params={"width": 832, "height": 1024}
+  )
+
+Returns:
+  {
+    "results": [
+      {"prompt": "a realistic cat", "outputs": ["http://...asset1.png"]},
+      {"prompt": "a cartoon cat", "outputs": ["http://...asset2.png"]},
+      {"prompt": "a cyberpunk cat", "outputs": ["http://...asset3.png"]}
+    ],
+    "ui_url": "http://127.0.0.1:8787/"
+  }
+```
+
+---
+
 ## この後の拡張（ロードマップ）
 
 - i2i / inpaint（`/upload/image`, `/upload/mask` を使う）

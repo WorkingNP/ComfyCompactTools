@@ -12,10 +12,15 @@
       "Bash(pytest:*)",
       "Bash(timeout /t 3)",
       "Bash(python -m server.main:*)",
+      "Bash(python -m server:*)",
       "Bash(ping:*)",
       "Bash(python -m uvicorn:*)",
       "Bash(curl:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(dir:*)",
+      "Bash(dir /b:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)"
     ]
   }
 }

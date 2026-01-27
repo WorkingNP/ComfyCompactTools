@@ -1,0 +1,10 @@
+[mcp_servers.comfy_cockpit]
+command = "python"
+args = ["-m", "server"]
+cwd = "C:/Users/souto/Desktop/grok-comfy-cockpit2"
+startup_timeout_sec = 30
+tool_timeout_sec = 900
+enabled = true
+
+[mcp_servers.comfy_cockpit.env]
+COCKPIT_BASE_URL = "http://127.0.0.1:8787"

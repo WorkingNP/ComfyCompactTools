@@ -20,7 +20,12 @@
       "Bash(dir:*)",
       "Bash(dir /b:*)",
       "Bash(head:*)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "mcp__codex__codex"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "codex"
+  ]
 }

@@ -16,6 +16,7 @@ class FakeCockpitApiClient:
         self.jobs_db: Dict[str, Dict[str, Any]] = {}
         self._job_counter = 0
         self.auto_complete = False
+        self.fail_on_job_number = None
         self._health_response = {
             "ok": True,
             "comfy_url": "http://127.0.0.1:8188",
@@ -86,6 +87,9 @@ class FakeCockpitApiClient:
     ) -> Dict[str, Any]:
         """Mock POST /api/jobs."""
         self._job_counter += 1
+        if self.fail_on_job_number is not None:
+            if self._job_counter == self.fail_on_job_number:
+                raise Exception(f"Simulated failure for job {self._job_counter}")
         job_id = f"job_{self._job_counter}"
         job = {
             "id": job_id,

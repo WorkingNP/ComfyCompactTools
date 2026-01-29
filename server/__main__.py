@@ -171,7 +171,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
             wait = arguments.get("wait", True)
             timeout_sec = arguments.get("timeout_sec", 600)
 
-            result = images_generate(
+            result = await images_generate(
                 client,
                 workflow_id=workflow_id,
                 params=params,
@@ -184,14 +184,18 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
 
         elif name == "images_generate_many":
             prompts = arguments.get("prompts")
-            if not prompts:
-                raise ValueError("prompts is required")
+            # Handle empty prompts list - return empty results instead of error
+            if prompts is None or len(prompts) == 0:
+                return [TextContent(type="text", text=json.dumps({
+                    "results": [],
+                    "ui_url": f"{BASE_URL}/",
+                }))]
             workflow_id = arguments.get("workflow_id", "flux2_klein_distilled")
             base_params = arguments.get("base_params", {})
             wait = arguments.get("wait", True)
             timeout_sec = arguments.get("timeout_sec", 600)
 
-            result = images_generate_many(
+            result = await images_generate_many(
                 client,
                 prompts=prompts,
                 workflow_id=workflow_id,

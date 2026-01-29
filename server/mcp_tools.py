@@ -5,9 +5,46 @@ These tools are designed to be called by LLMs via MCP protocol.
 All tools accept a CockpitApiClient for dependency injection (testability).
 """
 
+import asyncio
 import time
 from typing import Any, Dict, List, Optional
 from .cockpit_api_client import CockpitApiClient
+
+POLL_INTERVAL_SEC = 2
+MAX_COUNT = 100
+MAX_PROMPTS = 50
+
+
+def _coerce_seed(job_params: Dict[str, Any]) -> None:
+    """Coerce seed to int, raise if invalid."""
+    if "seed" in job_params:
+        seed = job_params["seed"]
+        if isinstance(seed, bool):
+            raise ValueError("seed must be an integer, got bool")
+        if not isinstance(seed, int):
+            try:
+                job_params["seed"] = int(seed)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"seed must be an integer, got {type(seed).__name__}"
+                )
+
+
+def _validate_count(count: int) -> None:
+    """Validate count parameter."""
+    if isinstance(count, bool) or not isinstance(count, int):
+        raise ValueError("count must be an integer")
+    if count < 1 or count > MAX_COUNT:
+        raise ValueError(f"count must be between 1 and {MAX_COUNT}")
+
+
+def _validate_prompts(prompts: List[str]) -> None:
+    """Validate prompts list."""
+    if len(prompts) > MAX_PROMPTS:
+        raise ValueError(f"prompts length must not exceed {MAX_PROMPTS}")
+    for i, prompt in enumerate(prompts):
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError(f"prompts[{i}] is empty or not a string")
 
 
 def workflows_list(client: CockpitApiClient) -> Dict[str, Any]:
@@ -54,7 +91,7 @@ def workflow_get(client: CockpitApiClient, workflow_id: str) -> Dict[str, Any]:
     return client.get_workflow(workflow_id)
 
 
-def images_generate(
+async def images_generate(
     client: CockpitApiClient,
     workflow_id: str = "flux2_klein_distilled",
     params: Optional[Dict[str, Any]] = None,
@@ -89,32 +126,61 @@ def images_generate(
             "ui_url": str,  # URL to view results in the UI
         }
     """
+    # Validate count
+    _validate_count(count)
+
     if params is None:
         params = {}
 
-    # Create jobs
+    # Create jobs with partial failure handling
     jobs = []
     for i in range(count):
         job_params = params.copy()
+        # Remove workflow_id from params to prevent collision
+        job_params.pop("workflow_id", None)
+        # Coerce and validate seed
+        _coerce_seed(job_params)
         # If seed not specified or -1, let server generate random seeds
         # If seed is specified, increment for each additional job
         if count > 1 and "seed" in job_params and job_params["seed"] >= 0:
             job_params["seed"] = job_params["seed"] + i
 
-        job = client.create_job(workflow_id, job_params)
-        jobs.append({
-            "job_id": job["id"],
-            "status": job["status"],
-            "outputs": [],
-            "error": job.get("error"),
-        })
+        try:
+            job = client.create_job(workflow_id, job_params)
+            jobs.append({
+                "job_id": job["id"],
+                "status": job["status"],
+                "outputs": [],
+                "error": job.get("error"),
+            })
+        except Exception as e:
+            jobs.append({
+                "job_id": None,
+                "status": "failed",
+                "outputs": [],
+                "error": f"Job creation failed: {str(e)}",
+            })
 
     # If wait=True, poll until completion
     if wait:
         start_time = time.time()
+        max_iterations = timeout_sec // POLL_INTERVAL_SEC + 10
+        iterations = 0
         while True:
+            iterations += 1
+            if iterations > max_iterations:
+                # Force timeout to prevent infinite loop
+                for job_info in jobs:
+                    if job_info["status"] not in ("completed", "failed"):
+                        job_info["status"] = "timeout"
+                        job_info["error"] = f"Max iterations reached ({max_iterations})"
+                break
+
             all_done = True
             for job_info in jobs:
+                # Skip failed jobs (no job_id)
+                if job_info["job_id"] is None:
+                    continue
                 if job_info["status"] in ("queued", "running") or (
                     job_info["status"] == "completed" and not job_info["outputs"]
                 ):
@@ -162,7 +228,7 @@ def images_generate(
                         job_info["error"] = f"Timeout after {timeout_sec}s"
                 break
 
-            time.sleep(2)  # Poll every 2 seconds
+            await asyncio.sleep(POLL_INTERVAL_SEC)  # Non-blocking sleep
 
     return {
         "jobs": jobs,
@@ -170,7 +236,7 @@ def images_generate(
     }
 
 
-def images_generate_many(
+async def images_generate_many(
     client: CockpitApiClient,
     prompts: List[str],
     workflow_id: str = "flux2_klein_distilled",
@@ -209,23 +275,37 @@ def images_generate_many(
             "ui_url": str,
         }
     """
+    # Validate prompts
+    _validate_prompts(prompts)
+
     if base_params is None:
         base_params = {}
 
     results = []
     for prompt in prompts:
         params = base_params.copy()
+        # Remove workflow_id from params to prevent collision
+        params.pop("workflow_id", None)
         params["prompt"] = prompt
 
-        # Generate single image (wait=False initially)
-        job = client.create_job(workflow_id, params)
-        results.append({
-            "prompt": prompt,
-            "job_id": job["id"],
-            "status": job["status"],
-            "outputs": [],
-            "error": job.get("error"),
-        })
+        try:
+            # Generate single image (wait=False initially)
+            job = client.create_job(workflow_id, params)
+            results.append({
+                "prompt": prompt,
+                "job_id": job["id"],
+                "status": job["status"],
+                "outputs": [],
+                "error": job.get("error"),
+            })
+        except Exception as e:
+            results.append({
+                "prompt": prompt,
+                "job_id": None,
+                "status": "failed",
+                "outputs": [],
+                "error": f"Job creation failed: {str(e)}",
+            })
 
     if not wait:
         return {
@@ -235,9 +315,23 @@ def images_generate_many(
 
     # Poll all jobs
     start_time = time.time()
+    max_iterations = timeout_sec // POLL_INTERVAL_SEC + 10
+    iterations = 0
     while True:
+        iterations += 1
+        if iterations > max_iterations:
+            # Force timeout to prevent infinite loop
+            for result in results:
+                if result["status"] not in ("completed", "failed"):
+                    result["status"] = "timeout"
+                    result["error"] = f"Max iterations reached ({max_iterations})"
+            break
+
         all_done = True
         for result in results:
+            # Skip failed jobs (no job_id)
+            if result["job_id"] is None:
+                continue
             if result["status"] in ("queued", "running") or (
                 result["status"] == "completed" and not result["outputs"]
             ):
@@ -280,7 +374,7 @@ def images_generate_many(
                     result["error"] = f"Timeout after {timeout_sec}s"
             break
 
-        time.sleep(2)
+        await asyncio.sleep(POLL_INTERVAL_SEC)  # Non-blocking sleep
 
     return {
         "results": results,

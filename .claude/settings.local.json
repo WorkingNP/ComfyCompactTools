@@ -28,7 +28,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:docs.claude-mem.ai)",
       "mcp__plugin_claude-mem_mcp-search__search",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(claude tasks)"
     ]
   },
   "enableAllProjectMcpServers": true,

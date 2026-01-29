@@ -111,7 +111,7 @@ class TestImagesGenerateMany:
     def test_images_generate_many_with_prompts_list(self):
         """Should create one job per prompt."""
         client = FakeCockpitApiClient()
-        # Mark all jobs as completed immediately
+        client.auto_complete = True
         result = images_generate_many(
             client,
             workflow_id="flux2_klein_distilled",
@@ -120,16 +120,13 @@ class TestImagesGenerateMany:
             timeout_sec=1,  # Short timeout since we'll complete immediately
         )
 
-        # Complete jobs before they're polled
-        for job in client.jobs_created:
-            client.set_job_completed(job["id"], [f"{job['id']}.png"])
-
         assert len(client.jobs_created) == 3
         assert client.jobs_created[0]["params"]["prompt"] == "cat"
         assert client.jobs_created[1]["params"]["prompt"] == "dog"
         assert client.jobs_created[2]["params"]["prompt"] == "tree"
         assert "results" in result
         assert len(result["results"]) == 3
+        assert all(r["outputs"] for r in result["results"])
 
     def test_images_generate_many_merges_base_params(self):
         """Should merge base_params with each prompt."""
@@ -139,12 +136,26 @@ class TestImagesGenerateMany:
             workflow_id="sd15_txt2img",
             prompts=["landscape"],
             base_params={"steps": 30, "seed": 42},
+            wait=False,
             timeout_sec=1,
         )
         assert len(client.jobs_created) == 1
         assert client.jobs_created[0]["params"]["prompt"] == "landscape"
         assert client.jobs_created[0]["params"]["steps"] == 30
         assert client.jobs_created[0]["params"]["seed"] == 42
+
+    def test_images_generate_many_wait_false_returns_immediately(self):
+        """Should return job ids without polling when wait=False."""
+        client = FakeCockpitApiClient()
+        result = images_generate_many(
+            client,
+            workflow_id="flux2_klein_distilled",
+            prompts=["one", "two"],
+            wait=False,
+        )
+        assert len(result["results"]) == 2
+        assert all(r["status"] == "queued" for r in result["results"])
+        assert all(r["outputs"] == [] for r in result["results"])
 
 
 # ===== Integration-style tests (still using fake client) =====

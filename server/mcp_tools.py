@@ -175,6 +175,7 @@ def images_generate_many(
     prompts: List[str],
     workflow_id: str = "flux2_klein_distilled",
     base_params: Optional[Dict[str, Any]] = None,
+    wait: bool = True,
     timeout_sec: int = 600,
     base_url: str = "http://127.0.0.1:8787",
 ) -> Dict[str, Any]:
@@ -189,6 +190,7 @@ def images_generate_many(
         prompts: List of prompts to generate (e.g., ["a cat", "a dog", "a tree"])
         workflow_id: The workflow to use (default: flux2_klein_distilled)
         base_params: Base parameters to merge with each prompt (e.g., {"width": 512})
+        wait: If True, poll until all jobs complete. If False, return immediately.
         timeout_sec: Maximum time to wait for all jobs to complete
         base_url: Base URL of the Cockpit server
 
@@ -224,6 +226,12 @@ def images_generate_many(
             "outputs": [],
             "error": job.get("error"),
         })
+
+    if not wait:
+        return {
+            "results": results,
+            "ui_url": f"{base_url}/",
+        }
 
     # Poll all jobs
     start_time = time.time()

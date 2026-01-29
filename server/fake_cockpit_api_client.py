@@ -15,6 +15,7 @@ class FakeCockpitApiClient:
         self.jobs_created: List[Dict[str, Any]] = []
         self.jobs_db: Dict[str, Dict[str, Any]] = {}
         self._job_counter = 0
+        self.auto_complete = False
         self._health_response = {
             "ok": True,
             "comfy_url": "http://127.0.0.1:8188",
@@ -100,6 +101,10 @@ class FakeCockpitApiClient:
             "progress_max": 100,
             "error": None,
         }
+        if self.auto_complete:
+            job["status"] = "completed"
+            job["outputs"] = [f"{job_id}.png"]
+            job["progress_value"] = 100
         self.jobs_created.append(job)
         self.jobs_db[job_id] = job
         return job

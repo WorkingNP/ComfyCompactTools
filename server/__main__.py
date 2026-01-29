@@ -112,7 +112,7 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Generate multiple images with different prompts in batch. "
                 "Useful for generating variations (e.g., 10 different cat images). "
-                "Waits for all to complete and returns URLs."
+                "Waits for all to complete and returns URLs (unless wait=false)."
             ),
             inputSchema={
                 "type": "object",
@@ -131,6 +131,11 @@ async def list_tools() -> list[Tool]:
                         "type": "object",
                         "description": "Base parameters to merge with each prompt (e.g., {\"width\": 512})",
                         "default": {},
+                    },
+                    "wait": {
+                        "type": "boolean",
+                        "description": "Wait for all completions (default: true)",
+                        "default": True,
                     },
                     "timeout_sec": {
                         "type": "integer",
@@ -183,6 +188,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
                 raise ValueError("prompts is required")
             workflow_id = arguments.get("workflow_id", "flux2_klein_distilled")
             base_params = arguments.get("base_params", {})
+            wait = arguments.get("wait", True)
             timeout_sec = arguments.get("timeout_sec", 600)
 
             result = images_generate_many(
@@ -190,6 +196,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
                 prompts=prompts,
                 workflow_id=workflow_id,
                 base_params=base_params,
+                wait=wait,
                 timeout_sec=timeout_sec,
                 base_url=BASE_URL,
             )

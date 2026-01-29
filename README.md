@@ -347,6 +347,7 @@ Add to your `claude_desktop_config.json` (or equivalent):
    - Returns image URLs ready to display
 4. **images_generate_many** - Batch generate with multiple prompts
    - Perfect for "generate 10 variations" use cases
+   - Set `wait=false` to return job IDs immediately (no polling)
 
 ### Example Usage (from LLM)
 

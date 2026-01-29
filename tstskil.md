@@ -6,7 +6,7 @@
 - ワークフローは ComfyUI の「API形式（File > Save (API Format)）」のJSON（template_api.json）を使う前提。
 - Gallery表示のため SaveImage を含むこと（MVP前提）。
 
-# あなたにやってほしいタスク
+# あなたがやるタスク
 ## 0) ユーザー入力（あなたが使う情報）
 ユーザーからの指定が無い場合、例を参考に命名すること。
 - workflow_id: <<workflow_id>>   （例: wan22_t2v_5b / qwen_image_edit / sdxl_txt2img など）

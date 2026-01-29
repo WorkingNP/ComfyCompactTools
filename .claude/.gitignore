@@ -1,0 +1,6 @@
+# ローカル設定（個人環境依存）
+settings.local.json
+
+# 一時ファイル
+*.tmp
+*.log

@@ -12,8 +12,6 @@
   3. 重要なUIフローは必ずE2Eテストを追加
 
 ---
-## プラン方針
-- AGENTS.md参照
 
 ## テスト方針
 - UIテストはAgent Browser（Vercel Agent Browser）を優先的に使用
@@ -41,3 +39,10 @@
 - planner、tdd-guide などの既存エージェントは通常通り使用可能です
 - プロジェクト固有の依存追加は慎重に行い、理由を記録してください
 - ComfyUIで使用するcheckpointは "C:\Users\souto\Desktop\ComfyUI_windows_portable\ComfyUI\models\checkpoints"
+
+
+---
+
+## MCP Tool Priority
+- When you need image generation, workflow listing, parameter discovery, or batch generation, use the `comfy_cockpit` MCP server tools first.
+

@@ -1,7 +1,10 @@
 """Model scanner utility for enumerating checkpoint and VAE files."""
 from __future__ import annotations
+import logging
 from pathlib import Path
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 def scan_models(directory: str, extensions: List[str] = None) -> List[str]:
@@ -20,16 +23,30 @@ def scan_models(directory: str, extensions: List[str] = None) -> List[str]:
         extensions = [".safetensors", ".ckpt", ".pt"]
 
     path = Path(directory)
-    if not path.exists() or not path.is_dir():
+
+    if not path.exists():
+        logger.warning(f"Model directory does not exist: {directory}")
         return []
 
-    models = []
-    for ext in extensions:
-        models.extend(path.glob(f"*{ext}"))
+    if not path.is_dir():
+        logger.error(f"Model path is not a directory: {directory}")
+        return []
 
-    # Return filenames only (ComfyUI expects filenames, not paths)
-    filenames = [f.name for f in models]
-    return sorted(filenames)
+    try:
+        models = []
+        for ext in extensions:
+            models.extend(path.glob(f"*{ext}"))
+
+        # Return filenames only (ComfyUI expects filenames, not paths)
+        filenames = [f.name for f in models]
+        logger.info(f"Found {len(filenames)} models in {directory}")
+        return sorted(filenames)
+    except PermissionError as e:
+        logger.error(f"Permission denied accessing {directory}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error scanning {directory}: {e}")
+        return []
 
 
 def scan_checkpoints(checkpoints_dir: str) -> List[str]:

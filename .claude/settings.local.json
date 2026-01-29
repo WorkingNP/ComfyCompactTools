@@ -22,7 +22,13 @@
       "Bash(head:*)",
       "Bash(tail:*)",
       "mcp__codex__codex",
-      "Bash(ls -la \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\\\\workflows\"\" 2>/dev/null || echo \"Directory not found \")"
+      "Bash(ls -la \"C:\\\\Users\\\\souto\\\\Desktop\\\\grok-comfy-cockpit2\\\\workflows\"\" 2>/dev/null || echo \"Directory not found \")",
+      "Bash(tree:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.claude-mem.ai)",
+      "mcp__plugin_claude-mem_mcp-search__search",
+      "Bash(ls:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

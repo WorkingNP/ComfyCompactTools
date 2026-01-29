@@ -1,0 +1,68 @@
+# ローカル設定ファイル（個人環境依存）
+config.local.toml
+
+# セッションログ
+sessions/
+*.log
+
+# 一時ファイル
+*.tmp
+*.bak
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+package-lock.json
+
+# Local data (keep only the placeholder)
+/data/
+!/data/.gitkeep
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Private folders
+Aurora攻略/
+
+# Large files / Models (never commit these)
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# ComfyUI installations / outputs
+画像ビューア/
+comfy_outputs/
+outputs/
+
+# Test outputs
+.pytest_cache/
+pytest-*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/

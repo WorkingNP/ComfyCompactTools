@@ -824,13 +824,19 @@ async def get_workflow(workflow_id: str) -> WorkflowDetailOut:
         # Inject dynamic choices for checkpoint/VAE
         if "checkpoint" in params:
             checkpoints = scan_checkpoints(settings.checkpoints_dir)
+            logger.info(f"Scanned checkpoints from {settings.checkpoints_dir}: {len(checkpoints)} files")
             if checkpoints:
                 params["checkpoint"]["choices"] = checkpoints
+            else:
+                logger.warning(f"No checkpoints found in {settings.checkpoints_dir}")
 
         if "vae" in params:
             vaes = scan_vaes(settings.vae_dir)
+            logger.info(f"Scanned VAEs from {settings.vae_dir}: {len(vaes)} files")
             if vaes:
                 params["vae"]["choices"] = vaes
+            else:
+                logger.warning(f"No VAEs found in {settings.vae_dir}")
 
         return WorkflowDetailOut(
             id=manifest["id"],

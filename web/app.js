@@ -17,6 +17,11 @@ const state = {
   thumbSize: 200,
   workflows: [], // Available workflows
   selectedWorkflow: null, // Currently selected workflow detail (with params)
+  galleryAutoRefresh: false,
+  galleryDirty: false,
+  galleryLastRenderCount: 0,
+  galleryPage: 0,
+  galleryPageSize: 9,
 };
 
 const GROK_HISTORY_TOGGLE_KEY = 'grokSendFullHistory';
@@ -50,13 +55,17 @@ function sortByCreatedDesc(a, b) {
   return (b.created_at || '').localeCompare(a.created_at || '');
 }
 
-function scheduleRender() {
+function scheduleRender({ gallery = false } = {}) {
   if (state.renderScheduled) return;
   state.renderScheduled = true;
   requestAnimationFrame(() => {
     state.renderScheduled = false;
     renderQueue();
-    renderGallery();
+    if (gallery || state.galleryAutoRefresh) {
+      renderGallery();
+    } else {
+      updateGalleryDirtyBadge();
+    }
     updateStatusCounts();
   });
 }
@@ -262,7 +271,15 @@ function renderQueue() {
 function renderGallery() {
   const el = $('#gallery');
   const assets = Array.from(state.assets.values()).sort(sortByCreatedDesc);
+  const pageSize = Math.max(1, Number(state.galleryPageSize || 9));
+  const pageCount = Math.max(1, Math.ceil(assets.length / pageSize));
+  if (state.galleryPage >= pageCount) state.galleryPage = pageCount - 1;
+  if (state.galleryPage < 0) state.galleryPage = 0;
+  const start = state.galleryPage * pageSize;
+  const pageAssets = assets.slice(start, start + pageSize);
   const frag = document.createDocumentFragment();
+
+  updateGalleryPager(pageCount);
 
   if (assets.length === 0) {
     const empty = document.createElement('div');
@@ -270,10 +287,13 @@ function renderGallery() {
     empty.textContent = 'まだ画像がありません。生成されるとここに勝手に増えます。';
     frag.appendChild(empty);
     el.replaceChildren(frag);
+    state.galleryLastRenderCount = assets.length;
+    state.galleryDirty = false;
+    updateGalleryDirtyBadge();
     return;
   }
 
-  for (const a of assets) {
+  for (const a of pageAssets) {
     const card = document.createElement('div');
     card.className = 'card';
     card.onclick = () => openModal(a.id);
@@ -285,7 +305,7 @@ function renderGallery() {
     if (a.favorite) {
       const star = document.createElement('div');
       star.className = 'star';
-      star.textContent = '★';
+      star.textContent = '?';
       card.appendChild(star);
     }
 
@@ -294,6 +314,9 @@ function renderGallery() {
   }
 
   el.replaceChildren(frag);
+  state.galleryLastRenderCount = assets.length;
+  state.galleryDirty = false;
+  updateGalleryDirtyBadge();
 }
 
 function isoNow() {
@@ -590,6 +613,9 @@ function initGalleryControls() {
   const range = $('#thumbSize');
   const value = $('#thumbSizeValue');
   const gallery = $('#gallery');
+  const refreshBtn = $('#galleryRefreshBtn');
+  const prevBtn = $('#galleryPrevBtn');
+  const nextBtn = $('#galleryNextBtn');
   if (!range || !value || !gallery) return;
   const apply = (val) => {
     state.thumbSize = val;
@@ -598,6 +624,50 @@ function initGalleryControls() {
   };
   apply(state.thumbSize);
   range.addEventListener('input', () => apply(Number(range.value || 200)));
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      scheduleRender({ gallery: true });
+    });
+  }
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      state.galleryPage = Math.max(0, state.galleryPage - 1);
+      scheduleRender({ gallery: true });
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      const total = Math.max(1, Math.ceil(state.assets.size / state.galleryPageSize));
+      state.galleryPage = Math.min(total - 1, state.galleryPage + 1);
+      scheduleRender({ gallery: true });
+    });
+  }
+
+  updateGalleryPager(1);
+  updateGalleryDirtyBadge();
+}
+
+function updateGalleryPager(pageCount) {
+  const info = $('#galleryPageInfo');
+  const prevBtn = $('#galleryPrevBtn');
+  const nextBtn = $('#galleryNextBtn');
+  const safeCount = Math.max(1, pageCount || 1);
+  const page = Math.min(Math.max(0, state.galleryPage), safeCount - 1);
+  if (info) info.textContent = `${page + 1} / ${safeCount}`;
+  if (prevBtn) prevBtn.disabled = page <= 0;
+  if (nextBtn) nextBtn.disabled = page >= safeCount - 1;
+}
+
+function updateGalleryDirtyBadge() {
+  const badge = $('#galleryDirty');
+  const refreshBtn = $('#galleryRefreshBtn');
+  if (!badge) return;
+  const pending = Math.max(0, state.assets.size - state.galleryLastRenderCount);
+  const show = state.galleryDirty && pending > 0;
+  badge.textContent = show ? `+${pending}` : '';
+  badge.style.display = show ? 'inline-flex' : 'none';
+  if (refreshBtn) refreshBtn.disabled = !show && state.assets.size === 0;
 }
 
 function renderGrokLog() {
@@ -739,7 +809,8 @@ async function sendGrok() {
       });
       if (Array.isArray(assets)) {
         for (const a of assets) state.assets.set(a.id, a);
-        scheduleRender();
+        state.galleryDirty = true;
+        scheduleRender({ gallery: state.galleryAutoRefresh });
       }
       const count = Array.isArray(assets) ? assets.length : 0;
       addGrokMessage('assistant', `Image generated: ${count}`);
@@ -893,7 +964,8 @@ async function toggleFavorite() {
   try {
     const updated = await apiPost(`/api/assets/${id}/favorite`);
     state.assets.set(updated.id, updated);
-    scheduleRender();
+    state.galleryDirty = true;
+    scheduleRender({ gallery: state.galleryAutoRefresh });
     openModal(updated.id);
   } catch (e) {
     alert(String(e));
@@ -1120,7 +1192,8 @@ function connectWS() {
     if (type === 'assets_snapshot') {
       state.assets.clear();
       for (const a of payload || []) state.assets.set(a.id, a);
-      scheduleRender();
+      state.galleryDirty = true;
+      scheduleRender({ gallery: state.galleryAutoRefresh });
       return;
     }
 
@@ -1144,7 +1217,8 @@ function connectWS() {
 
     if (type === 'asset_created' || type === 'asset_updated') {
       state.assets.set(payload.id, payload);
-      scheduleRender();
+      state.galleryDirty = true;
+      scheduleRender({ gallery: state.galleryAutoRefresh });
       return;
     }
   };
@@ -1159,7 +1233,7 @@ async function boot() {
   await initGrok();
   await initGrokHistory();
   connectWS();
-  scheduleRender();
+  scheduleRender({ gallery: true });
 }
 
 boot().catch((e) => {

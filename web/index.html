@@ -166,6 +166,13 @@
       <div class="pane__title">Gallery</div>
       <div class="pane__body pane__body--stack">
         <div class="galleryToolbar">
+          <button id="galleryRefreshBtn" class="btn btn--sm">Refresh</button>
+          <span id="galleryDirty" class="galleryToolbar__dirty" style="display:none">+0</span>
+          <div class="galleryPager">
+            <button id="galleryPrevBtn" class="btn btn--sm">Prev</button>
+            <span id="galleryPageInfo" class="galleryToolbar__value">1 / 1</span>
+            <button id="galleryNextBtn" class="btn btn--sm">Next</button>
+          </div>
           <span class="galleryToolbar__label">Thumb</span>
           <input id="thumbSize" class="galleryToolbar__range" type="range" min="120" max="320" value="200" />
           <span id="thumbSizeValue" class="galleryToolbar__value">200</span>

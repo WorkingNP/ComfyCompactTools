@@ -177,6 +177,11 @@ body {
   cursor: pointer;
 }
 
+.btn--sm {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 .btn:hover {
   border-color: rgba(74,163,255,.55);
 }
@@ -408,6 +413,7 @@ body {
   --thumb-size: 200px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--thumb-size), 1fr));
+  align-content: start;
   gap: 10px;
 }
 
@@ -418,11 +424,12 @@ body {
   background: var(--panel2);
   cursor: pointer;
   position: relative;
+  aspect-ratio: 1 / 1;
 }
 
 .card img {
   width: 100%;
-  height: var(--thumb-size);
+  height: 100%;
   object-fit: cover;
   display: block;
 }
@@ -544,6 +551,7 @@ body {
 .galleryToolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--border);
@@ -551,6 +559,21 @@ body {
   background: #0b0f14;
   font-size: 12px;
   color: var(--muted);
+}
+
+.galleryPager {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.galleryToolbar__dirty {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255,176,32,.2);
+  border: 1px solid rgba(255,176,32,.4);
+  color: #ffd27d;
+  font-size: 11px;
 }
 
 .galleryToolbar__range {

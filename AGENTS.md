@@ -1,6 +1,7 @@
 # Agent Instructions
 
 - When you need image generation, workflow listing, parameter discovery, or batch generation, use the comfy_cockpit MCP server tools first.
+- For image generation requests, submit jobs with wait=false and do not block on completion.
 
 # Project rules (ComfyCompactTools)
 

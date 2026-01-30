@@ -68,7 +68,7 @@ body {
   height: 100%;
   min-height: 0; /* ★ これがないと内部スクロールが効かず、下が見切れやすい */
   display: grid;
-  grid-template-columns: 360px 360px 1fr;
+  grid-template-columns: 360px 1fr;
   gap: 10px;
   padding: 10px;
 }

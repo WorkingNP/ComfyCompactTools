@@ -22,6 +22,8 @@ const state = {
   galleryLastRenderCount: 0,
   galleryPage: 0,
   galleryPageSize: 9,
+  queueLimit: 50,
+  wsPrefs: { jobs: false, job_progress: false },
 };
 
 const GROK_HISTORY_TOGGLE_KEY = 'grokSendFullHistory';
@@ -164,7 +166,10 @@ async function queuePrompt({ keepText }) {
 
 function renderQueue() {
   const el = $('#queueList');
-  const jobs = Array.from(state.jobs.values()).sort(sortByCreatedDesc);
+  if (!el) return;
+  const jobs = Array.from(state.jobs.values())
+    .sort(sortByCreatedDesc)
+    .slice(0, state.queueLimit || 50);
 
   const frag = document.createDocumentFragment();
 
@@ -1150,6 +1155,11 @@ function connectWS() {
     setPill($('#wsStatus'), 'WS: connected', 'pill--good');
     // Ping loop so the server-side receive loop doesn't idle forever.
     startWsPing(ws);
+    try {
+      const prefs = state.wsPrefs || { job_progress: false };
+      state.wsPrefs = prefs;
+      ws.send(JSON.stringify({ type: 'prefs', payload: prefs }));
+    } catch {}
   };
 
   ws.onclose = () => {
@@ -1205,6 +1215,7 @@ function connectWS() {
     }
 
     if (type === 'job_progress') {
+      if (state.wsPrefs && state.wsPrefs.job_progress === false) return;
       const j = state.jobs.get(payload.job_id);
       if (j) {
         j.progress_value = payload.value;

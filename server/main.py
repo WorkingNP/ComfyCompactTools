@@ -1255,12 +1255,20 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     try:
         # On connect, push initial state.
         await ws.send_json({"type": "hello", "payload": {"ok": True}})
-        await ws.send_json({"type": "jobs_snapshot", "payload": [jobrow_to_out(r).model_dump() for r in db.list_jobs(limit=200)]})
-        await ws.send_json({"type": "assets_snapshot", "payload": [assetrow_to_out(r).model_dump() for r in db.list_assets(limit=200)]})
+        prefs = ws_manager.get_prefs(ws)
+        if prefs.get("jobs", True):
+            await ws.send_json({"type": "jobs_snapshot", "payload": [jobrow_to_out(r).model_dump() for r in db.list_jobs(limit=200)]})
+        if prefs.get("assets", True):
+            await ws.send_json({"type": "assets_snapshot", "payload": [assetrow_to_out(r).model_dump() for r in db.list_assets(limit=200)]})
 
         while True:
-            # We don't currently accept inbound messages; keep socket alive.
-            await ws.receive_text()
+            raw = await ws.receive_text()
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(msg, dict) and msg.get("type") == "prefs":
+                await ws_manager.update_prefs(ws, msg.get("payload"))
     except Exception:
         pass
     finally:

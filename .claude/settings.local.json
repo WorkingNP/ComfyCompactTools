@@ -29,7 +29,8 @@
       "WebFetch(domain:docs.claude-mem.ai)",
       "mcp__plugin_claude-mem_mcp-search__search",
       "Bash(ls:*)",
-      "Bash(claude tasks)"
+      "Bash(claude tasks)",
+      "Bash(find:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

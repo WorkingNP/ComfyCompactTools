@@ -1,0 +1,174 @@
+{
+  "37": {
+    "inputs": {
+      "unet_name": "wan2.2_ti2v_5B_fp16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model (Wan2.2 TI2V 5B)"
+    }
+  },
+  "38": {
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP (umt5_xxl)"
+    }
+  },
+  "39": {
+    "inputs": {
+      "vae_name": "wan2.2_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE (Wan2.2)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "__PROMPT__",
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "worst quality, low quality, bad anatomy, bad hands, extra fingers, missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts",
+      "clip": [
+        "38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "48": {
+    "inputs": {
+      "model": [
+        "37",
+        0
+      ],
+      "shift": 8.0
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "56": {
+    "inputs": {
+      "image": "example.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "55": {
+    "inputs": {
+      "vae": [
+        "39",
+        0
+      ],
+      "width": 1280,
+      "height": 704,
+      "length": 121,
+      "batch_size": 1,
+      "start_image": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "Wan22ImageToVideoLatent",
+    "_meta": {
+      "title": "Wan22ImageToVideoLatent"
+    }
+  },
+  "3": {
+    "inputs": {
+      "model": [
+        "48",
+        0
+      ],
+      "seed": 0,
+      "steps": 20,
+      "cfg": 5.0,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple",
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "55",
+        0
+      ],
+      "denoise": 1.0
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "57": {
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "fps": 24.0
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "58": {
+    "inputs": {
+      "video": [
+        "57",
+        0
+      ],
+      "filename_prefix": "video/ComfyUI",
+      "format": "auto",
+      "codec": "auto"
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  }
+}

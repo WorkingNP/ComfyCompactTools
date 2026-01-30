@@ -14,16 +14,20 @@ def test_settings_default_directories():
     settings = get_settings()
     assert hasattr(settings, 'checkpoints_dir')
     assert hasattr(settings, 'vae_dir')
+    assert hasattr(settings, 'comfy_input_dir')
     assert settings.checkpoints_dir
     assert settings.vae_dir
+    assert settings.comfy_input_dir
     assert Path(settings.checkpoints_dir).is_absolute()
     assert Path(settings.vae_dir).is_absolute()
+    assert Path(settings.comfy_input_dir).is_absolute()
 
 
 def test_settings_env_override(monkeypatch):
     """Test environment variable override."""
     monkeypatch.setenv("COMFY_CHECKPOINTS_DIR", "/tmp/checkpoints")
     monkeypatch.setenv("COMFY_VAE_DIR", "/tmp/vae")
+    monkeypatch.setenv("COMFY_INPUT_DIR", "/tmp/input")
 
     # Need to reload settings after env change
     from server.main import get_settings
@@ -31,6 +35,7 @@ def test_settings_env_override(monkeypatch):
 
     assert settings.checkpoints_dir == "/tmp/checkpoints"
     assert settings.vae_dir == "/tmp/vae"
+    assert settings.comfy_input_dir == "/tmp/input"
 
 
 def test_settings_has_directories():
@@ -40,5 +45,7 @@ def test_settings_has_directories():
     # Verify the singleton settings instance has the new attributes
     assert hasattr(settings, 'checkpoints_dir')
     assert hasattr(settings, 'vae_dir')
+    assert hasattr(settings, 'comfy_input_dir')
     assert isinstance(settings.checkpoints_dir, str)
     assert isinstance(settings.vae_dir, str)
+    assert isinstance(settings.comfy_input_dir, str)

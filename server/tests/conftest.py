@@ -208,3 +208,19 @@ def sd15_template() -> Dict[str, Any]:
     template_path = _repo_root() / "workflows" / "sd15_txt2img" / "template_api.json"
     with open(template_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+@pytest.fixture
+def wan22_manifest() -> Dict[str, Any]:
+    """Load the actual wan2_2_ti2v_5b manifest."""
+    manifest_path = _repo_root() / "workflows" / "wan2_2_ti2v_5b" / "manifest.json"
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@pytest.fixture
+def wan22_template() -> Dict[str, Any]:
+    """Load the actual wan2_2_ti2v_5b template."""
+    template_path = _repo_root() / "workflows" / "wan2_2_ti2v_5b" / "template_api.json"
+    with open(template_path, "r", encoding="utf-8") as f:
+        return json.load(f)

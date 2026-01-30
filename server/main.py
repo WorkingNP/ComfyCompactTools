@@ -7,13 +7,14 @@ import json
 import os
 import sys
 import uuid
+import logging
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
@@ -30,6 +31,8 @@ from .workflow_patcher import apply_patch, PatchError
 
 load_dotenv()
 
+logger = logging.getLogger("cockpit")
+
 
 @dataclass
 class Settings:
@@ -45,6 +48,7 @@ class Settings:
     # Model directory paths
     checkpoints_dir: str
     vae_dir: str
+    comfy_input_dir: str
 
 
 def get_settings() -> Settings:
@@ -90,6 +94,11 @@ def get_settings() -> Settings:
             config.get("vae_dir") or
             os.getenv("COMFY_VAE_DIR",
                       r"C:\Users\souto\Desktop\ComfyUI_windows_portable\ComfyUI\models\vae")
+        ),
+        comfy_input_dir=str(
+            config.get("comfy_input_dir") or
+            os.getenv("COMFY_INPUT_DIR",
+                      r"C:\Users\souto\Desktop\ComfyUI_windows_portable\ComfyUI\input")
         ),
     )
 
@@ -303,6 +312,10 @@ class WorkflowDetailOut(BaseModel):
     version: str = ""
     params: Dict[str, Any]
     presets: Dict[str, Any] = {}
+
+
+class UploadImageOut(BaseModel):
+    filename: str
 
 
 def jobrow_to_out(row, outputs: Optional[List[Dict[str, Any]]] = None) -> JobOut:
@@ -856,6 +869,25 @@ async def reload_workflows() -> Dict[str, Any]:
     workflow_registry.reload()
     workflows = workflow_registry.list_workflows()
     return {"ok": True, "count": len(workflows)}
+
+
+@app.post("/api/uploads/image", response_model=UploadImageOut)
+async def upload_image(file: UploadFile = File(...)) -> UploadImageOut:
+    """Upload an image to ComfyUI input directory and return filename."""
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="filename is required")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="file is empty")
+
+    ext = os.path.splitext(filename)[1] or ".png"
+    stored_name = new_asset_filename(prefix="upload", ext=ext)
+    ensure_dir(settings.comfy_input_dir)
+    write_bytes(os.path.join(settings.comfy_input_dir, stored_name), data)
+
+    return UploadImageOut(filename=stored_name)
 
 
 @app.post("/api/grok/image", response_model=List[AssetOut])

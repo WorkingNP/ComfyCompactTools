@@ -1,0 +1,155 @@
+{
+  "$schema": "../../docs/manifest.schema.json",
+  "id": "wan2_2_ti2v_5b",
+  "name": "Wan2.2 TI2V 5B (i2v)",
+  "description": "Wan2.2 TI2V 5B image-to-video workflow",
+  "version": "1.0.0",
+  "template_file": "template_api.json",
+  "params": {
+    "prompt": {
+      "type": "string",
+      "required": true,
+      "default": "masterpiece, best quality, high detail, 1girl, full body, walking, dancing",
+      "description": "The text prompt for video generation",
+      "patch": {
+        "node_id": "6",
+        "field": "inputs.text"
+      }
+    },
+    "negative_prompt": {
+      "type": "string",
+      "required": false,
+      "default": "worst quality, low quality, bad anatomy, bad hands, extra fingers, missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts",
+      "description": "Negative prompt",
+      "patch": {
+        "node_id": "7",
+        "field": "inputs.text"
+      }
+    },
+    "width": {
+      "type": "integer",
+      "required": false,
+      "default": 1280,
+      "min": 32,
+      "max": 16384,
+      "description": "Video width",
+      "patch": {
+        "node_id": "55",
+        "field": "inputs.width"
+      }
+    },
+    "height": {
+      "type": "integer",
+      "required": false,
+      "default": 704,
+      "min": 32,
+      "max": 16384,
+      "description": "Video height",
+      "patch": {
+        "node_id": "55",
+        "field": "inputs.height"
+      }
+    },
+    "length": {
+      "type": "integer",
+      "required": false,
+      "default": 121,
+      "min": 1,
+      "max": 16384,
+      "description": "Number of frames",
+      "patch": {
+        "node_id": "55",
+        "field": "inputs.length"
+      }
+    },
+    "fps": {
+      "type": "number",
+      "required": false,
+      "default": 24,
+      "min": 1,
+      "max": 120,
+      "description": "Frames per second",
+      "patch": {
+        "node_id": "57",
+        "field": "inputs.fps"
+      }
+    },
+    "steps": {
+      "type": "integer",
+      "required": false,
+      "default": 20,
+      "min": 1,
+      "max": 1000,
+      "description": "Number of sampling steps",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.steps"
+      }
+    },
+    "cfg": {
+      "type": "number",
+      "required": false,
+      "default": 5.0,
+      "min": 0.0,
+      "max": 30.0,
+      "description": "CFG scale",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.cfg"
+      }
+    },
+    "sampler_name": {
+      "type": "string",
+      "required": false,
+      "default": "uni_pc",
+      "description": "Sampling algorithm",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.sampler_name"
+      }
+    },
+    "scheduler": {
+      "type": "string",
+      "required": false,
+      "default": "simple",
+      "description": "Noise scheduler",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.scheduler"
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "required": false,
+      "default": -1,
+      "min": -1,
+      "max": 2147483647,
+      "description": "Random seed (-1 for random)",
+      "patch": {
+        "node_id": "3",
+        "field": "inputs.seed"
+      }
+    },
+    "start_image": {
+      "type": "image",
+      "required": true,
+      "description": "Start image filename in ComfyUI input",
+      "patch": {
+        "node_id": "56",
+        "field": "inputs.image"
+      }
+    }
+  },
+  "presets": {
+    "default": {
+      "width": 1280,
+      "height": 704,
+      "length": 121,
+      "fps": 24,
+      "steps": 20,
+      "cfg": 5.0,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple"
+    }
+  }
+}

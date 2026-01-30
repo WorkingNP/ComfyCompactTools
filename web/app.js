@@ -101,12 +101,18 @@ function readParamsFromUI() {
   // If using dynamic workflow form
   if (state.selectedWorkflow) {
     payload.workflow_id = state.selectedWorkflow.id;
+    payload.params = {};
 
     // Read all dynamic params
     const dynamicInputs = document.querySelectorAll('#dynamicParams [data-param-name]');
     for (const input of dynamicInputs) {
       const paramName = input.getAttribute('data-param-name');
       const paramType = input.getAttribute('data-param-type');
+
+      if (paramType === 'image') {
+        // File uploads are handled separately before submit
+        continue;
+      }
 
       let value;
       if (input.type === 'checkbox') {
@@ -121,13 +127,13 @@ function readParamsFromUI() {
         value = input.value;
       }
 
-      payload[paramName] = value;
+      payload.params[paramName] = value;
     }
 
     // Ensure prompt from quickPrompt takes priority if present
     const quickPrompt = $('#quickPrompt');
     if (quickPrompt && quickPrompt.value.trim()) {
-      payload.prompt = quickPrompt.value.trim();
+      payload.params.prompt = quickPrompt.value.trim();
     }
   } else {
     // Legacy mode: use old fixed form
@@ -149,12 +155,43 @@ function readParamsFromUI() {
   return payload;
 }
 
+async function uploadImageParams(params) {
+  if (!params) return;
+  const imageInputs = document.querySelectorAll('#dynamicParams [data-param-type="image"]');
+  for (const input of imageInputs) {
+    const paramName = input.getAttribute('data-param-name');
+    const isRequired = input.getAttribute('data-param-required') === 'true';
+    const file = input.files && input.files[0];
+
+    if (!file) {
+      if (isRequired) {
+        throw new Error(`${paramName} is required`);
+      }
+      continue;
+    }
+
+    const form = new FormData();
+    form.append('file', file);
+    const r = await fetch('/api/uploads/image', { method: 'POST', body: form });
+    if (!r.ok) {
+      throw new Error(`/api/uploads/image -> ${r.status}`);
+    }
+    const j = await r.json();
+    if (j && j.filename) {
+      params[paramName] = j.filename;
+    }
+  }
+}
+
 async function queuePrompt({ keepText }) {
   const payload = readParamsFromUI();
-  const p = (payload.prompt || '').trim();
+  const p = (payload.params?.prompt || payload.prompt || '').trim();
   if (!p) return;
 
   try {
+    if (payload.params) {
+      await uploadImageParams(payload.params);
+    }
     await apiPost('/api/jobs', payload);
     if (!keepText) $('#quickPrompt').value = '';
     $('#quickPrompt').focus();
@@ -227,14 +264,13 @@ function renderQueue() {
       const params = j.params || {};
       const workflow_id = params.workflow_id;
 
-      // Build payload preserving workflow_id if present
-      const payload = {
-        prompt: promptText,
-        ...params
-      };
-
-      // Override prompt with edited value
-      payload.prompt = promptText;
+      // Build payload preserving workflow_id if present (params-style)
+      const safeParams = { ...params };
+      delete safeParams.workflow_id;
+      safeParams.prompt = promptText;
+      const payload = workflow_id
+        ? { workflow_id, params: safeParams }
+        : { params: safeParams };
 
       try {
         await apiPost('/api/jobs', payload);
@@ -419,6 +455,14 @@ async function initTemplates() {
 
 async function initWorkflows() {
   try {
+    // Ensure server refreshes workflow registry (avoid stale cache)
+    try {
+      await apiPost('/api/workflows/reload');
+    } catch (e) {
+      // Non-fatal: continue with existing cache
+      console.warn('Workflow reload failed:', e);
+    }
+
     const workflows = await apiGet('/api/workflows');
     state.workflows = Array.isArray(workflows) ? workflows : [];
 
@@ -537,6 +581,12 @@ function generateDynamicForm(params) {
       if (paramDef.min !== undefined) input.min = paramDef.min;
       if (paramDef.max !== undefined) input.max = paramDef.max;
       if (paramDef.default !== undefined) input.value = paramDef.default;
+    } else if (type === 'image') {
+      // Image -> file input
+      input = document.createElement('input');
+      input.className = 'input';
+      input.type = 'file';
+      input.accept = 'image/*';
     } else {
       // String (default) or prompt -> text input or textarea
       if (paramName === 'prompt' || paramName === 'negative_prompt') {
@@ -555,6 +605,7 @@ function generateDynamicForm(params) {
     input.id = `dynamic_${paramName}`;
     input.setAttribute('data-param-name', paramName);
     input.setAttribute('data-param-type', type);
+    input.setAttribute('data-param-required', paramDef.required ? 'true' : 'false');
 
     div.appendChild(input);
     container.appendChild(div);

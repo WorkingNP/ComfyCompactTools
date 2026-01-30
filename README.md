@@ -154,6 +154,7 @@ The cockpit supports multiple workflows through a template + manifest architectu
 | `flux2_klein_distilled` | Flux 2 Klein 4B distilled (fast, 4 steps) | **Yes** |
 | `sd15_txt2img` | Classic Stable Diffusion 1.5 text-to-image | No |
 | `sdxl_txt2img` | Stable Diffusion XL 1.0 text-to-image with external VAE | No |
+| `wan2_2_ti2v_5b` | Wan2.2 TI2V 5B image-to-video (start_image required) | No |
 
 ### SDXL Workflow
 
@@ -170,7 +171,8 @@ Configure model directories in `config.json`:
 ```json
 {
   "checkpoints_dir": "C:\\Users\\souto\\Desktop\\ComfyUI_windows_portable\\ComfyUI\\models\\checkpoints",
-  "vae_dir": "C:\\Users\\souto\\Desktop\\ComfyUI_windows_portable\\ComfyUI\\models\\vae"
+  "vae_dir": "C:\\Users\\souto\\Desktop\\ComfyUI_windows_portable\\ComfyUI\\models\\vae",
+  "comfy_input_dir": "C:\\Users\\souto\\Desktop\\ComfyUI_windows_portable\\ComfyUI\\input"
 }
 ```
 
@@ -180,10 +182,12 @@ Or via environment variables:
 # Windows (PowerShell)
 $env:COMFY_CHECKPOINTS_DIR="C:\path\to\checkpoints"
 $env:COMFY_VAE_DIR="C:\path\to\vae"
+$env:COMFY_INPUT_DIR="C:\path\to\ComfyUI\input"
 
 # Linux/Mac
 export COMFY_CHECKPOINTS_DIR="/path/to/checkpoints"
 export COMFY_VAE_DIR="/path/to/vae"
+export COMFY_INPUT_DIR="/path/to/ComfyUI/input"
 ```
 
 The workflow dynamically populates dropdown choices based on available models in these directories.
@@ -206,6 +210,40 @@ curl -X POST http://127.0.0.1:8787/api/jobs \
   -H "Content-Type: application/json" \
   -d '{"prompt": "a cat", "workflow_id": "sd15_txt2img"}'
 ```
+
+### Wan2.2 TI2V (i2v) workflow
+
+1) Upload start image to ComfyUI input:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/uploads/image \
+  -F "file=@/path/to/start.png"
+```
+
+Response: `{"filename":"upload_...png"}`
+
+2) Create a job:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow_id": "wan2_2_ti2v_5b",
+    "params": {
+      "prompt": "a cinematic sunset over the ocean",
+      "start_image": "upload_...png",
+      "width": 640,
+      "height": 352,
+      "length": 24,
+      "fps": 12,
+      "steps": 10,
+      "cfg": 5.0
+    }
+  }'
+```
+
+**Note:** This workflow outputs a video file directly into ComfyUI's output folder.  
+The current Cockpit UI does **not** import or preview the video yet, so please confirm the result manually in the ComfyUI output directory.
 
 ### API Endpoints
 

@@ -86,7 +86,7 @@ Each key in `params` is a parameter name. The value is:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes | One of: `string`, `integer`, `number`, `boolean` |
+| `type` | string | Yes | One of: `string`, `integer`, `number`, `boolean`, `image` |
 | `required` | boolean | No | Default: false |
 | `default` | any | No | Default value if not provided |
 | `min` | number | No | Minimum value (for integer/number) |
@@ -101,6 +101,11 @@ Each key in `params` is a parameter name. The value is:
 |-------|------|----------|-------------|
 | `node_id` | string | Yes | The node ID in the template |
 | `field` | string | Yes | Dot-notation path to the field (e.g., `inputs.seed`) |
+
+### Image parameter type
+
+`type: "image"` is used for image inputs (e.g., `start_image`).  
+The value should be a **filename in ComfyUI's input directory** (uploaded beforehand).
 
 ## Example: SD 1.5 txt2img
 

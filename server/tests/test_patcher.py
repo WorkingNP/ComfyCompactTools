@@ -331,6 +331,8 @@ def _generate_test_value(param_def: Dict[str, Any]) -> Any:
         return (min_val + max_val) / 2
     elif param_type == "boolean":
         return True
+    elif param_type == "image":
+        return "test_input.png"
     else:
         return "unknown_type_value"
 
@@ -517,3 +519,91 @@ class TestSD15ManifestDriven:
                     f"Parameter '{param_name}' not patched correctly. "
                     f"Expected {test_value!r}, got {actual!r}"
                 )
+
+
+class TestWan22ManifestDriven:
+    """Manifest-driven tests for wan2_2_ti2v_5b workflow."""
+
+    def test_all_params_patch_correctly(
+        self, wan22_template: Dict[str, Any], wan22_manifest: Dict[str, Any]
+    ):
+        """Test that ALL params defined in manifest patch correctly."""
+        from server.workflow_patcher import apply_patch
+
+        manifest_params = wan22_manifest.get("params", {})
+
+        for param_name, param_def in manifest_params.items():
+            test_value = _generate_test_value(param_def)
+
+            # Required params for this workflow
+            params = {
+                "prompt": "test prompt",
+                "start_image": "test_input.png",
+            }
+            if param_name == "prompt":
+                params["prompt"] = test_value
+            elif param_name == "start_image":
+                params["start_image"] = test_value
+            else:
+                params[param_name] = test_value
+
+            result = apply_patch(wan22_template, wan22_manifest, params)
+
+            patch_def = param_def.get("patch", {})
+            node_id = patch_def.get("node_id")
+            field_path = patch_def.get("field")
+
+            if node_id and field_path:
+                actual = _get_nested_value(result, node_id, field_path)
+                assert actual == test_value, (
+                    f"Parameter '{param_name}' not patched correctly. "
+                    f"Expected {test_value!r}, got {actual!r}"
+                )
+
+    def test_start_image_patches_to_load_image(
+        self, wan22_template: Dict[str, Any], wan22_manifest: Dict[str, Any]
+    ):
+        """Start image should patch to LoadImage node."""
+        from server.workflow_patcher import apply_patch
+
+        params = {
+            "prompt": "test",
+            "start_image": "input.png",
+        }
+        result = apply_patch(wan22_template, wan22_manifest, params)
+
+        assert result["56"]["inputs"]["image"] == "input.png"
+
+    def test_dimensions_length_patch_to_latent(
+        self, wan22_template: Dict[str, Any], wan22_manifest: Dict[str, Any]
+    ):
+        """Width/height/length should patch Wan22ImageToVideoLatent."""
+        from server.workflow_patcher import apply_patch
+
+        params = {
+            "prompt": "test",
+            "start_image": "input.png",
+            "width": 640,
+            "height": 352,
+            "length": 24,
+        }
+        result = apply_patch(wan22_template, wan22_manifest, params)
+
+        assert result["55"]["inputs"]["width"] == 640
+        assert result["55"]["inputs"]["height"] == 352
+        assert result["55"]["inputs"]["length"] == 24
+
+    def test_fps_patches_create_video(
+        self, wan22_template: Dict[str, Any], wan22_manifest: Dict[str, Any]
+    ):
+        """FPS should patch CreateVideo node."""
+        from server.workflow_patcher import apply_patch
+
+        params = {
+            "prompt": "test",
+            "start_image": "input.png",
+            "fps": 12,
+        }
+        result = apply_patch(wan22_template, wan22_manifest, params)
+
+        assert result["57"]["inputs"]["fps"] == 12

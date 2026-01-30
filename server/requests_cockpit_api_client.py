@@ -69,7 +69,7 @@ class RequestsCockpitApiClient:
         url = f"{self.base_url}/api/jobs"
         payload = {
             "workflow_id": workflow_id,
-            **params,
+            "params": params,
         }
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(url, json=payload)

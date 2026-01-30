@@ -76,6 +76,49 @@ class TestWorkflowsAPI:
         assert data["ok"] is True
         assert "count" in data
 
+    def test_wan22_workflow_present(self, test_client):
+        """wan2_2_ti2v_5b should be discoverable in workflows list."""
+        response = test_client.get("/api/workflows")
+        assert response.status_code == 200
+        workflows = response.json()
+        ids = [w["id"] for w in workflows]
+        assert "wan2_2_ti2v_5b" in ids
+
+    def test_wan22_workflow_detail_has_start_image(self, test_client):
+        """wan2_2_ti2v_5b should expose image param for start_image."""
+        response = test_client.get("/api/workflows/wan2_2_ti2v_5b")
+        assert response.status_code == 200
+        detail = response.json()
+        params = detail.get("params", {})
+        assert "start_image" in params
+        assert params["start_image"]["type"] == "image"
+
+    def test_wan22_defaults_match_recommended(self, test_client):
+        """wan2_2_ti2v_5b defaults should match recommended settings."""
+        response = test_client.get("/api/workflows/wan2_2_ti2v_5b")
+        assert response.status_code == 200
+        detail = response.json()
+        params = detail.get("params", {})
+
+        expected_prompt = (
+            "masterpiece, best quality, high detail, 1girl, full body, walking, dancing"
+        )
+        expected_negative = (
+            "worst quality, low quality, bad anatomy, bad hands, extra fingers, "
+            "missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts"
+        )
+
+        assert params["width"]["default"] == 1280
+        assert params["height"]["default"] == 704
+        assert params["length"]["default"] == 121
+        assert params["fps"]["default"] == 24
+        assert params["steps"]["default"] == 20
+        assert params["cfg"]["default"] == 5.0
+        assert params["sampler_name"]["default"] == "uni_pc"
+        assert params["scheduler"]["default"] == "simple"
+        assert params["prompt"]["default"] == expected_prompt
+        assert params["negative_prompt"]["default"] == expected_negative
+
 
 class TestJobsAPIValidation:
     """Tests for /api/jobs validation."""
@@ -169,6 +212,28 @@ class TestHealthAndConfig:
         assert "comfy_url" in data
         assert "defaults" in data
         assert "choices" in data
+
+
+class TestUploads:
+    """Tests for upload endpoints."""
+
+    def test_upload_image_saves_file(self, test_client, tmp_path):
+        """POST /api/uploads/image should save the file in comfy input dir."""
+        from server import main
+
+        # Point Comfy input dir to temp for test isolation
+        main.settings.comfy_input_dir = str(tmp_path)
+
+        file_bytes = b"test-image-bytes"
+        files = {"file": ("input.png", file_bytes, "image/png")}
+        response = test_client.post("/api/uploads/image", files=files)
+        assert response.status_code == 200
+        data = response.json()
+        assert "filename" in data
+
+        saved_path = tmp_path / data["filename"]
+        assert saved_path.exists()
+        assert saved_path.read_bytes() == file_bytes
 
 
 class TestGetJobById:
@@ -290,6 +355,22 @@ class TestCreateJobWithMock:
         assert response.status_code == 200  # Job is created but marked as failed
 
         data = response.json()
+        assert data["status"] in ["queued", "failed"]
+
+        # Background task should mark it as failed shortly after
+        if data["status"] != "failed":
+            import time
+            job_id = data["id"]
+            for _ in range(10):
+                time.sleep(0.1)
+                r = test_client_with_fake_comfy.get(f"/api/jobs/{job_id}")
+                if r.status_code != 200:
+                    continue
+                updated = r.json()
+                if updated["status"] == "failed":
+                    data = updated
+                    break
+
         assert data["status"] == "failed"
         assert data["error"] is not None
 

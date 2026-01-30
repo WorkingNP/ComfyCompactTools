@@ -8,6 +8,7 @@
 - Wan2.2 の i2v（画像→動画）を manifest + template 方式で追加したい
 - 現状の動的フォームはトップレベル送信のため、未知パラメータが JobCreate で切り捨てられる
 - 動画出力は assets に取り込む仕組みがないため、今回は手動確認とする
+- Workflow追加後に UI の一覧へ出てこないことがある（workflow_registry のキャッシュ）
 
 ## 2. ゴール（Goals）
 - [ ] /api/workflows に `wan2_2_ti2v_5b` が出る
@@ -15,6 +16,7 @@
 - [ ] `prompt/negative_prompt/width/height/length/fps/steps/cfg/sampler/scheduler/seed/start_image` を params 経由で受け取れる
 - [ ] start_image をアップロードして ComfyUI/input に保存できる
 - [ ] 生成された動画は **ComfyUI output で手動確認**できる
+- [ ] UIのWorkflow選択に `wan2_2_ti2v_5b` が表示される（必要なら /api/workflows/reload を叩く）
 - [ ] `pytest -m "not e2e"` が緑
 
 ## 3. 非ゴール（Non-goals）
@@ -24,7 +26,7 @@
 
 ## 4. 影響範囲（Touch points）
 ### UI
-- web/app.js: 画像入力（type=image）を file input に変換、params 送信を統一
+- web/app.js: 画像入力（type=image）を file input に変換、params 送信を統一、必要なら workflows reload
 - web/index.html / web/styles.css: 画像入力に必要な見た目調整（必要なら最小）
 
 ### Server / API
@@ -63,6 +65,8 @@
   - [ ] FakeComfyClient で submit prompt の組み立て確認
 
 - E2E:
+  - [ ] Agent Browser でUIを開き、Workflow選択に `wan2_2_ti2v_5b` が表示されることを確認（スクショ保存）
+  - [ ] テスト画像はルートの `スクリーンショット 2026-01-27 161718.png` を使用
   - [ ] job 生成が開始されることを最低限確認
   - [ ] **動画の結果確認は手動**（ComfyUI output で確認）
 
@@ -71,6 +75,7 @@
 - [ ] params 統一送信（UI/クライアント）
 - [ ] /api/uploads/image 実装 + 保存先設定
 - [ ] apply_patch 対象ノードの更新（manifest の patch 定義）
+- [ ] UI 初期化時に /api/workflows/reload → /api/workflows の順で取得（キャッシュ対策）
 
 ### Phase 3: リファクタ（REFACTOR）
 - [ ] params 正規化の重複を整理

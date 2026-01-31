@@ -10,6 +10,7 @@
     "prompt": {
       "type": "string",
       "required": true,
+      "default": "masterpiece, best quality, high detail",
       "description": "The text prompt for image generation",
       "patch": {
         "node_id": "2",
@@ -19,7 +20,7 @@
     "negative_prompt": {
       "type": "string",
       "required": false,
-      "default": "",
+      "default": "worst quality, low quality, bad anatomy, bad hands, extra fingers, missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts",
       "description": "Negative prompt (minimal effect for distilled models)",
       "patch": {
         "node_id": "3",

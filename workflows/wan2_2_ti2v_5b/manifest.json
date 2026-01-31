@@ -9,7 +9,7 @@
     "prompt": {
       "type": "string",
       "required": true,
-      "default": "masterpiece, best quality, high detail, 1girl, full body, walking, dancing",
+      "default": "masterpiece, best quality, high detail",
       "description": "The text prompt for video generation",
       "patch": {
         "node_id": "6",

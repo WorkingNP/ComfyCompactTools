@@ -93,6 +93,49 @@ class TestWorkflowsAPI:
         assert "start_image" in params
         assert params["start_image"]["type"] == "image"
 
+    def test_flux2_klein_defaults_match_official(self, test_client):
+        """flux2_klein_distilled defaults should match official template values."""
+        response = test_client.get("/api/workflows/flux2_klein_distilled")
+        if response.status_code == 404:
+            pytest.skip("flux2_klein_distilled workflow not available")
+
+        manifest = response.json()
+        params = manifest["params"]
+
+        expected_prompt = "masterpiece, best quality, high detail"
+        expected_negative = (
+            "worst quality, low quality, bad anatomy, bad hands, extra fingers, "
+            "missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts"
+        )
+
+        assert params["prompt"]["default"] == expected_prompt
+        assert params["negative_prompt"]["default"] == expected_negative
+        assert params["steps"]["default"] == 4
+        assert params["cfg"]["default"] == 1.0
+        assert params["width"]["default"] == 1024
+        assert params["height"]["default"] == 1024
+
+    def test_sdxl_manifest_defaults_match_official(self, test_client):
+        """sdxl_txt2img defaults should match official template values."""
+        response = test_client.get("/api/workflows/sdxl_txt2img")
+        if response.status_code == 404:
+            pytest.skip("sdxl_txt2img workflow not available")
+
+        manifest = response.json()
+        params = manifest["params"]
+
+        assert params["prompt"]["default"] == "masterpiece, best quality, high detail"
+        assert params["negative_prompt"]["default"] == (
+            "worst quality, low quality, bad anatomy, bad hands, extra fingers, "
+            "missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts"
+        )
+        assert params["steps"]["default"] == 25
+        assert params["cfg"]["default"] == 8.0
+        assert params["sampler_name"]["default"] == "euler"
+        assert params["scheduler"]["default"] == "normal"
+        assert params["width"]["default"] == 1024
+        assert params["height"]["default"] == 1024
+
     def test_wan22_defaults_match_recommended(self, test_client):
         """wan2_2_ti2v_5b defaults should match recommended settings."""
         response = test_client.get("/api/workflows/wan2_2_ti2v_5b")
@@ -100,9 +143,7 @@ class TestWorkflowsAPI:
         detail = response.json()
         params = detail.get("params", {})
 
-        expected_prompt = (
-            "masterpiece, best quality, high detail, 1girl, full body, walking, dancing"
-        )
+        expected_prompt = "masterpiece, best quality, high detail"
         expected_negative = (
             "worst quality, low quality, bad anatomy, bad hands, extra fingers, "
             "missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts"
@@ -176,8 +217,13 @@ class TestManifestDefaults:
         params = manifest["params"]
 
         assert params["steps"]["default"] == 20
-        assert params["cfg"]["default"] == 7.0
+        assert params["cfg"]["default"] == 8.0
         assert params["width"]["default"] == 512
+        assert params["prompt"]["default"] == "masterpiece, best quality, high detail"
+        assert params["negative_prompt"]["default"] == (
+            "worst quality, low quality, bad anatomy, bad hands, extra fingers, "
+            "missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts"
+        )
 
 
 class TestHealthAndConfig:

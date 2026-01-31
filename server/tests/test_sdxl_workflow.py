@@ -94,7 +94,7 @@ class TestSDXLPatching:
         # SDXL defaults should be 1024
         assert result["4"]["inputs"]["width"] == 1024
         assert result["4"]["inputs"]["height"] == 1024
-        assert result["5"]["inputs"]["steps"] == 30  # Higher than SD1.5
+        assert result["5"]["inputs"]["steps"] == 25  # Official template default
 
 
 class TestSDXLRegistry:

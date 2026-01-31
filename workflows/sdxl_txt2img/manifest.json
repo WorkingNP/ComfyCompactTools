@@ -10,6 +10,7 @@
     "prompt": {
       "type": "string",
       "required": true,
+      "default": "masterpiece, best quality, high detail",
       "description": "The text prompt for image generation",
       "patch": {
         "node_id": "2",
@@ -19,7 +20,7 @@
     "negative_prompt": {
       "type": "string",
       "required": false,
-      "default": "",
+      "default": "worst quality, low quality, bad anatomy, bad hands, extra fingers, missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts",
       "description": "Negative prompt (things to avoid)",
       "patch": {
         "node_id": "3",
@@ -73,7 +74,7 @@
     "steps": {
       "type": "integer",
       "required": false,
-      "default": 30,
+      "default": 25,
       "min": 1,
       "max": 150,
       "description": "Number of sampling steps",
@@ -85,7 +86,7 @@
     "cfg": {
       "type": "number",
       "required": false,
-      "default": 7.5,
+      "default": 8.0,
       "min": 1.0,
       "max": 30.0,
       "description": "Classifier-free guidance scale",
@@ -109,7 +110,7 @@
     "sampler_name": {
       "type": "string",
       "required": false,
-      "default": "dpmpp_2m",
+      "default": "euler",
       "description": "Sampling algorithm",
       "patch": {
         "node_id": "5",
@@ -119,7 +120,7 @@
     "scheduler": {
       "type": "string",
       "required": false,
-      "default": "karras",
+      "default": "normal",
       "description": "Noise scheduler",
       "patch": {
         "node_id": "5",
@@ -144,10 +145,10 @@
     "default": {
       "width": 1024,
       "height": 1024,
-      "steps": 30,
-      "cfg": 7.5,
-      "sampler_name": "dpmpp_2m",
-      "scheduler": "karras"
+      "steps": 25,
+      "cfg": 8.0,
+      "sampler_name": "euler",
+      "scheduler": "normal"
     },
     "portrait": {
       "width": 896,

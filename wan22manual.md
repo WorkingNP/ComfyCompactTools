@@ -11,7 +11,7 @@
 - Seed: -1 (random)
 
 ## Prompt presets (defaults in manifest)
-- Positive: "masterpiece, best quality, high detail, 1girl, full body, walking, dancing"
+- Positive: "masterpiece, best quality, high detail"
 - Negative: "worst quality, low quality, bad anatomy, bad hands, extra fingers, missing fingers, deformed, disfigured, blurry, watermark, text, jpeg artifacts"
 
 ## Notes

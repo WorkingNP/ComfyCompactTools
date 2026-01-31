@@ -8,7 +8,7 @@
 1. 公式テンプレ/推奨値を確認
 2. manifest + template を作成（推奨値を default に設定）
 3. APIテストで params/patch を固定
-4. サーバー再起動 or /api/workflows/reload
+4. サーバー再起動 or /api/workflows/reload（指示待ちせず自動で実施）
 5. UIは最後（Phase2）に追加
 6. 出力確認は手動で ComfyUI output を見る
 
@@ -58,7 +58,7 @@
 
 ### 反映手順
 - まず /api/workflows/reload を叩く
-- それでもダメならサーバー再起動
+- それでもダメならサーバー再起動（指示待ち不要）
 - /openapi.json で新エンドポイントが出ているか確認
 
 判定例:

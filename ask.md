@@ -197,3 +197,50 @@ ngative:backlighting, rim lighting only, reverse light, character silhouetted ag
 表情も相まって、"サディスティックな笑みを浮かべた強キャラが暗がりから歩いて登場するシーン"とかに近い構図だと思う。でも、雑魚そう。調子に乗った表情が陰になってしまっているうえに、剥き出しの弱点=局部ばかりが異常に目立ってしまっているせいで、正直どんなセリフ喋っていても全く頭に入ってこなさそう。
 
 話ガン無視しておっぱい鷲掴みにしたら速攻勝てそう。局部剥き出しなのに強気、ガキっぽいのに偉そう、往来なのに得意げ、つまり、自分が無敵だと思い込んでるだけの雑魚。「ちんこ丸出しで何言ってんだこいつ」のまんこ版って感じ。なのに異様に自信があるのは、そのルックスと体つきのせいだろうなと容易に想像できる。「じゃあこうしてやるよ」と速攻犯してわからせられそうな距離で弱点が剥き出しになっている。一見被支配的な構図に感じるが、性的支配への容易な逆転を予兆させる。つまり、わからせメスガキとか即落ち２コマの属性だよね。
+
+かなりの進化
+pose with arms at waist creating subtle illusion of lifting skirt edges without actually holding, distorted perspective with breasts and thighs protruding forward aggressively while face slightly receded, composite viewpoint showing breast top surface and thighs from below simultaneously, cubism-inspired multiple perspectives for exaggerated exposure, unnatural depth where protruding parts appear closer than face, straight standing pose with warped foreshortening on curves, viewer eye level ambiguous with face slightly higher but body parts dominating foreground,modest clothing coverage with fabric or shadows concealing nipples, thick mature body with heavy flesh on hips thighs and buttocks, fully developed adult bone structure and curves despite childlike face, exaggerated meaty thickness in lower body, heavy uncontrollable breasts with realistic weight and volume, human healthy plump skin with natural sweat gloss, no underdeveloped or slim features
+ネガティブプロンプト
+realistic consistent perspective, holding skirt explicitly, natural foreshortening from top to bottom, face and body at equal depth, single viewpoint camera, physically accurate proportions and distance,visible nipples, direct breast exposure, slim waist, slender thighs, loli skinny body, underdeveloped proportions, fragile delicate build, flat or small hips
+
+
+ローアングルの画像セットであれば、高レベル
+pose with arms at waist creating subtle illusion of lifting skirt edges without actually holding, distorted perspective with breasts and thighs protruding forward aggressively while face slightly receded, composite viewpoint showing breast top surface and thighs from below simultaneously, cubism-inspired multiple perspectives for exaggerated exposure, unnatural depth where protruding parts appear closer than face, straight standing pose with warped foreshortening on curves, viewer eye level ambiguous with face slightly higher but body parts dominating foreground,modest clothing coverage with fabric or shadows concealing nipples, thick mature body with heavy flesh on hips thighs and buttocks, fully developed adult bone structure and curves despite childlike face, exaggerated meaty thickness in lower body, heavy uncontrollable breasts with realistic weight and volume, human healthy plump skin with natural sweat gloss, no underdeveloped or slim features,eye level slightly above character with ambiguous viewpoint, straight on view with face at near eye level and body parts protruding forward unnaturally, neutral camera angle avoiding low angle upshot, composite perspective keeping head and face forward while curves dominate foreground, no extreme low angle or worm's eye view
+ネガティブプロンプト
+realistic consistent perspective, holding skirt explicitly, natural foreshortening from top to bottom, face and body at equal depth, single viewpoint camera, physically accurate proportions and distance,visible nipples, direct breast exposure, slim waist, slender thighs, loli skinny body, underdeveloped proportions, fragile delicate build, flat or small hips,low angle shot, worm's eye view, looking up at character, extreme foreshortening from below, dominant low camera position, thighs and breasts from extreme bottom view
+
+
+胸のサイズ
+extremely large heavy breasts with strong fabric strain deep compressed cleavage and realistic weight protruding aggressively into light,
+
+空気感
+
+
+複合視点・ふとももの位置
+
+
+派生・ふともも下から強調
+
+
+ロリっぽい顔
+
+
+ひらひらリボン
+
+
+特徴的な服
+
+
+胸だけ突き出たようなライティング
+
+
+
+遠近感
+
+
+ネガティブ
+mature face, strong confident eyes, mysterious seductive smile, realistic high school girl features, even lighting on body, breasts fully in light, calculated pose, adult-like arrogance
+
+
+
+

@@ -1,4 +1,4 @@
-﻿---
+---
 name: ask1
 description: ask.mdのキャラクタープロファイリングメモを元に、flux2_klein_distilled（またはユーザー指定）でアニメ/ゲーム調の画像を50枚（指定があれば優先）生成する。質問は禁止、固定seed、comfy_cockpit MCPでバッチ生成する場合に使う。
 ---
